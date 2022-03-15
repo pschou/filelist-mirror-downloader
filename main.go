@@ -78,14 +78,6 @@ func main() {
 		}
 	}
 
-	// Sort the mirror list by latency
-	useList.Shuffle()
-
-	if *debug {
-		fmt.Println("Mirror list:")
-		useList.Print()
-	}
-
 	// Setup a worker group to do work!
 	jobs := make(chan string, *threads)
 	closure := make(chan int, *threads)
@@ -100,10 +92,21 @@ func main() {
 	defer file.Close()
 
 	// Read line one by one and send to threads
+	i := 0
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		line := scanner.Text()
 		if strings.HasPrefix(line, "{") {
+			i++
+			if i%30 == 0 {
+				// Sort the mirror list by weight, latency + failures + random
+				useList.Shuffle()
+
+				if *debug {
+					fmt.Println("Mirror list:")
+					useList.Print()
+				}
+			}
 			jobs <- scanner.Text()
 		}
 	}
@@ -135,6 +138,10 @@ func worker(mirrors MirrorList, jobs <-chan string, outputPath string, closure c
 		if err != nil {
 			fmt.Println("Error:", err)
 			m.Failures++
+		} else {
+			if *debug {
+				fmt.Println("Success on", url)
+			}
 		}
 		m.InUse = false
 	}
@@ -150,6 +157,7 @@ func downloadFile(m *Mirror, hash, size, url, output string) error {
 	defer resp.Body.Close()
 
 	dir, _ := path.Split(output)
+	hashInterface := getHash(hash)
 
 	// Create the directory if needed
 	err = ensureDir(dir)
@@ -157,12 +165,39 @@ func downloadFile(m *Mirror, hash, size, url, output string) error {
 		log.Fatal(err)
 	}
 
+	// Check if file exists
+	fileStat, err := os.Stat(output)
+	if err == nil {
+		if fileStat.IsDir() {
+			fmt.Println("File is directory", output)
+			log.Fatal(err)
+		}
+		if fmt.Sprintf("%d", fileStat.Size()) != size {
+			if *debug {
+				fmt.Println("Mismatched size of file", output)
+			}
+		} else {
+			file, err := os.Open(output)
+			if err != nil {
+				return err
+			}
+			io.Copy(hashInterface, file)
+			if checkHash(hash, hashInterface) == nil {
+				if *debug {
+					fmt.Println("Skipping, found valid file:", output)
+				}
+				return nil
+			}
+			hashInterface = getHash(hash)
+		}
+		os.Remove(output)
+	}
+
 	file, err := os.Create(output)
 	if err != nil {
 		return err
 	}
 
-	hashInterface := getHash(hash)
 	if hashInterface == nil {
 		return fmt.Errorf("Unknown hash type for: %s", hash)
 	}
@@ -190,6 +225,10 @@ func downloadFile(m *Mirror, hash, size, url, output string) error {
 		}
 	}
 
+	if fmt.Sprintf("%d", fileSize) != size {
+		return fmt.Errorf("Size mismatch, %d != %s", fileSize, size)
+	}
+
 	// Check the hash and return any errors
 	return checkHash(hash, hashInterface)
 }
@@ -206,9 +245,6 @@ func checkHash(hash string, h hash.Hash) error {
 	switch {
 	case strings.HasPrefix(hash, "{sha256}"):
 		if strings.EqualFold(strings.TrimPrefix(hash, "{sha256}"), fmt.Sprintf("%x", h.Sum(nil))) {
-			if *debug {
-				fmt.Println("check passed!")
-			}
 			return nil
 		}
 	}
