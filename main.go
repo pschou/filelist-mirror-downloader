@@ -32,6 +32,7 @@ import (
 var version = "test"
 var debug *bool
 var attempts *int
+var returnInt int
 
 // HelloGet is an HTTP Cloud Function.
 func main() {
@@ -121,6 +122,8 @@ func main() {
 	for w := 1; w <= *threads; w++ {
 		<-closure // ensure all the threads are closed
 	}
+
+	os.Exit(returnInt)
 }
 
 var client = http.Client{
@@ -149,6 +152,9 @@ func worker(mirrors MirrorList, jobs <-chan string, outputPath string, closure c
 				}
 				break
 			}
+		}
+		if len(skip) == *attempts {
+			returnInt = 1
 		}
 	}
 	closure <- 1
@@ -233,11 +239,16 @@ func downloadFile(m *Mirror, hash, size, url, output string) error {
 	}
 
 	if fmt.Sprintf("%d", fileSize) != size {
+		os.Remove(output)
 		return fmt.Errorf("Size mismatch, %d != %s", fileSize, size)
 	}
 
 	// Check the hash and return any errors
-	return checkHash(hash, hashInterface)
+	err = checkHash(hash, hashInterface)
+	if err != nil {
+		os.Remove(output)
+	}
+	return err
 }
 
 func getHash(hash string) hash.Hash {
