@@ -12,10 +12,12 @@ while doing checksums and parallel downloads for speed.
 # Usage help:
 ```bash
 $ ./filelist-mirror-downloader -h
-Yum Get RepoMD,  Version: 0.1.20220315.1310
+Yum Get RepoMD,  Version: 0.1.20220315.1410
 
 Usage: ./filelist-mirror-downloader [options...]
 
+  -attempts int
+        Attempts for each file (default 5)
   -debug
         Turn on debug comments
   -list string
@@ -26,7 +28,6 @@ Usage: ./filelist-mirror-downloader [options...]
         Path to put the repo files (default ".")
   -threads int
         Concurrent downloads (default 1)
-
 ```
 
 
