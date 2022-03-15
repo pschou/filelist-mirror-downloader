@@ -81,6 +81,10 @@ func main() {
 		}
 	}
 
+	if len(useList) == 0 {
+		log.Fatal("No mirrors found")
+	}
+
 	// Setup a worker group to do work!
 	jobs := make(chan string, *threads)
 	closure := make(chan int, *threads)
@@ -133,6 +137,9 @@ var client = http.Client{
 func worker(mirrors MirrorList, jobs <-chan string, outputPath string, closure chan<- int) {
 	for j := range jobs {
 		parts := strings.SplitN(j, " ", 3)
+		if len(parts) < 3 {
+			fmt.Println("Invalid format for input file list")
+		}
 		output := path.Join(outputPath, parts[2])
 		skip := []int{}
 		for len(skip) < *attempts {
