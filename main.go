@@ -1,0 +1,216 @@
+// Written by Paul Schou (paulschou.com) March 2022
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     https://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package main
+
+import (
+	"bufio"
+	"crypto/sha256"
+	"flag"
+	"fmt"
+	"hash"
+	"io"
+	"log"
+	"net/http"
+	"os"
+	"path"
+	"strings"
+	"time"
+)
+
+var version = "test"
+var debug *bool
+
+// HelloGet is an HTTP Cloud Function.
+func main() {
+	flag.Usage = func() {
+		fmt.Fprintf(os.Stderr, "Yum Get RepoMD,  Version: %s\n\nUsage: %s [options...]\n\n", version, os.Args[0])
+		flag.PrintDefaults()
+	}
+
+	var mirrorList = flag.String("mirrors", "mirrorlist.txt", "Mirror / directory list of prefixes to use")
+	var outputPath = flag.String("output", ".", "Path to put the repo files")
+	var threads = flag.Int("threads", 1, "Concurrent downloads")
+	var fileList = flag.String("list", "filelist.txt", "Filelist to be fetched (one per line with: HASH SIZE PATH)")
+	debug = flag.Bool("debug", false, "Turn on debug comments")
+
+	flag.Parse()
+
+	// Create the directory if needed
+	err := ensureDir(*outputPath)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	mirrors := readMirrors(*mirrorList)
+	var tmp string
+	var useList MirrorList // List of mirrors to use
+
+	// Test speeds
+	for i, m := range mirrors {
+		//repoPath := m + "/" + repoPath + "/"
+		//repomdPath := repoPath + "repodata/repomd.xml"
+		start := time.Now()
+		tmp = readFile(m)
+		delta := time.Now().Sub(start).Seconds() * 1000
+		if *debug {
+			fmt.Printf("%d) %.02f ms for %d bytes - %s\n", i, delta, len(tmp), m)
+		}
+		if delta < 4000 && len(tmp) > 100 {
+			useList = append(useList, Mirror{
+				URL:     m,
+				Latency: delta,
+				Client: http.Client{
+					Timeout: 5 * time.Second,
+				},
+			})
+		}
+	}
+
+	// Sort the mirror list by latency
+	useList.Shuffle()
+
+	if *debug {
+		fmt.Println("Mirror list:")
+		useList.Print()
+	}
+
+	// Setup a worker group to do work!
+	jobs := make(chan string, *threads)
+	closure := make(chan int, *threads)
+	for w := 1; w <= *threads; w++ {
+		go worker(useList, jobs, *outputPath, closure)
+	}
+
+	file, err := os.Open(*fileList)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer file.Close()
+
+	// Read line one by one and send to threads
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.HasPrefix(line, "{") {
+			jobs <- scanner.Text()
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		log.Fatal(err)
+	}
+
+	close(jobs)
+	for w := 1; w <= *threads; w++ {
+		<-closure // ensure all the threads are closed
+	}
+}
+
+var client = http.Client{
+	Timeout: 5 * time.Second,
+}
+
+func worker(mirrors MirrorList, jobs <-chan string, outputPath string, closure chan<- int) {
+	for j := range jobs {
+		m := mirrors.Pop()
+		parts := strings.SplitN(j, " ", 3)
+		url := m.URL + "/" + strings.TrimPrefix(parts[2], "/")
+		output := path.Join(outputPath, parts[2])
+		if *debug {
+			fmt.Println("Downloading file", url, "to", output)
+		}
+		err := downloadFile(m, parts[0], parts[1], url, output)
+		if err != nil {
+			fmt.Println("Error:", err)
+			m.Failures++
+		}
+		m.InUse = false
+	}
+	closure <- 1
+}
+
+func downloadFile(m *Mirror, hash, size, url, output string) error {
+	resp, err := m.Client.Get(url)
+	if err != nil {
+		log.Println("Error in HTTP get request", err)
+		return err
+	}
+	defer resp.Body.Close()
+
+	dir, _ := path.Split(output)
+
+	// Create the directory if needed
+	err = ensureDir(dir)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	file, err := os.Create(output)
+	if err != nil {
+		return err
+	}
+
+	hashInterface := getHash(hash)
+	if hashInterface == nil {
+		return fmt.Errorf("Unknown hash type for: %s", hash)
+	}
+	buf := make([]byte, 10000)
+	var readBytes, fileSize int
+	var readErr error
+
+	// Do the download!
+	for readErr != io.EOF {
+		// read from webserver
+		readBytes, readErr = resp.Body.Read(buf)
+		if err != nil {
+			return err
+		}
+		fileSize += readBytes
+
+		_, err = file.Write(buf[:readBytes])
+		if err != nil {
+			return err
+		}
+
+		_, err = hashInterface.Write(buf[:readBytes])
+		if err != nil {
+			return err
+		}
+	}
+
+	// Check the hash and return any errors
+	return checkHash(hash, hashInterface)
+}
+
+func getHash(hash string) hash.Hash {
+	switch {
+	case strings.HasPrefix(hash, "{sha256}"):
+		return sha256.New()
+	}
+	return nil
+}
+
+func checkHash(hash string, h hash.Hash) error {
+	switch {
+	case strings.HasPrefix(hash, "{sha256}"):
+		if strings.EqualFold(strings.TrimPrefix(hash, "{sha256}"), fmt.Sprintf("%x", h.Sum(nil))) {
+			if *debug {
+				fmt.Println("check passed!")
+			}
+			return nil
+		}
+	}
+	return fmt.Errorf("Hash check failed")
+}
