@@ -1,0 +1,2 @@
+{sha256}078df219eb34b52cef5f93c17533da34f2eceaec30e85da8944716d38dfee196 113223560 7/updates/x86_64/Packages/firefox-91.7.0-3.el7.centos.i686.rpm
+{sha256}0b48a1dc6bd965ac5f800c44cf498da51c5fd0ec07bf16a07911d66f89932c4b 111384796 7/updates/x86_64/Packages/firefox-91.7.0-3.el7.centos.x86_64.rpm

@@ -72,7 +72,7 @@ func (m MirrorList) Shuffle() {
 	defer MirrorListSync.Unlock()
 	for i := range m {
 		if m[i].ID == 0 {
-			m[i].ID = m[i].ID + 1
+			m[i].ID = i + 1
 		}
 		m[i].Random = rand.Float64() * 40
 		m[i].mirrors = m
@@ -103,10 +103,12 @@ func (m Mirror) ClearUse(id int) {
 func (m MirrorList) PopWithout(skip []int) *Mirror {
 	MirrorListSync.Lock()
 	defer MirrorListSync.Unlock()
+	//fmt.Println("mirror list: %+v\n", m)
+poploop:
 	for i := range m {
 		for id := range skip {
 			if id == m[i].ID {
-				continue
+				continue poploop
 			}
 		}
 		if m[i].InUse == false {

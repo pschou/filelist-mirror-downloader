@@ -8,11 +8,15 @@ while doing checksums and parallel downloads for speed.
 ./filelist-mirror-downloader -output output
 ```
 
+Threaded download:
+```bash
+./filelist-mirror-downloader -list filelist2.txt -debug -output testout -threads 2
+```
 
 # Usage help:
 ```bash
 $ ./filelist-mirror-downloader -h
-Yum Get RepoMD,  Version: 0.1.20220315.1410
+Yum Get RepoMD,  Version: 0.1.20220315.1450
 
 Usage: ./filelist-mirror-downloader [options...]
 
@@ -26,10 +30,8 @@ Usage: ./filelist-mirror-downloader [options...]
         Mirror / directory list of prefixes to use (default "mirrorlist.txt")
   -output string
         Path to put the repo files (default ".")
+  -shuffle int
+        Shuffle the mirror list ever N downloads (default 10)
   -threads int
         Concurrent downloads (default 1)
 ```
-
-
-
-

@@ -31,7 +31,7 @@ import (
 
 var version = "test"
 var debug *bool
-var attempts *int
+var attempts, shuffleAfter *int
 var returnInt int
 
 // HelloGet is an HTTP Cloud Function.
@@ -45,6 +45,7 @@ func main() {
 	var outputPath = flag.String("output", ".", "Path to put the repo files")
 	var threads = flag.Int("threads", 1, "Concurrent downloads")
 	attempts = flag.Int("attempts", 5, "Attempts for each file")
+	shuffleAfter = flag.Int("shuffle", 10, "Shuffle the mirror list ever N downloads")
 	var fileList = flag.String("list", "filelist.txt", "Filelist to be fetched (one per line with: HASH SIZE PATH)")
 	debug = flag.Bool("debug", false, "Turn on debug comments")
 
@@ -72,6 +73,7 @@ func main() {
 		}
 		if delta < 4000 && len(tmp) > 100 {
 			useList = append(useList, Mirror{
+				ID:      i + 1,
 				URL:     m,
 				Latency: delta,
 				Client: http.Client{
@@ -105,7 +107,7 @@ func main() {
 		line := scanner.Text()
 		if strings.HasPrefix(line, "{") {
 			i++
-			if i%30 == 0 {
+			if i%(*shuffleAfter) == 0 {
 				// Sort the mirror list by weight, latency + failures + random
 				useList.Shuffle()
 
@@ -144,6 +146,10 @@ func worker(mirrors MirrorList, jobs <-chan string, outputPath string, closure c
 		skip := []int{}
 		for len(skip) < *attempts {
 			m := mirrors.PopWithout(skip)
+			if m == nil {
+				fmt.Println("  no additional mirrors to try")
+				break
+			}
 			url := m.URL + "/" + strings.TrimPrefix(parts[2], "/")
 			if *debug {
 				fmt.Println("Downloading file", url, "to", output)
