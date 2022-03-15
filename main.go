@@ -31,6 +31,7 @@ import (
 
 var version = "test"
 var debug *bool
+var attempts *int
 
 // HelloGet is an HTTP Cloud Function.
 func main() {
@@ -42,6 +43,7 @@ func main() {
 	var mirrorList = flag.String("mirrors", "mirrorlist.txt", "Mirror / directory list of prefixes to use")
 	var outputPath = flag.String("output", ".", "Path to put the repo files")
 	var threads = flag.Int("threads", 1, "Concurrent downloads")
+	attempts = flag.Int("attempts", 5, "Attempts for each file")
 	var fileList = flag.String("list", "filelist.txt", "Filelist to be fetched (one per line with: HASH SIZE PATH)")
 	debug = flag.Bool("debug", false, "Turn on debug comments")
 
@@ -127,29 +129,34 @@ var client = http.Client{
 
 func worker(mirrors MirrorList, jobs <-chan string, outputPath string, closure chan<- int) {
 	for j := range jobs {
-		m := mirrors.Pop()
 		parts := strings.SplitN(j, " ", 3)
-		url := m.URL + "/" + strings.TrimPrefix(parts[2], "/")
 		output := path.Join(outputPath, parts[2])
-		if *debug {
-			fmt.Println("Downloading file", url, "to", output)
-		}
-		err := downloadFile(m, parts[0], parts[1], url, output)
-		if err != nil {
-			fmt.Println("Error:", err)
-			m.Failures++
-		} else {
+		skip := []int{}
+		for len(skip) < *attempts {
+			m := mirrors.PopWithout(skip)
+			url := m.URL + "/" + strings.TrimPrefix(parts[2], "/")
 			if *debug {
-				fmt.Println("Success on", url)
+				fmt.Println("Downloading file", url, "to", output)
+			}
+			err := downloadFile(m, parts[0], parts[1], url, output)
+			if err != nil {
+				skip = append(skip, m.ID)
+				fmt.Println("Error:", err)
+				m.Failures++
+			} else {
+				if *debug {
+					fmt.Println("Success on", url)
+				}
+				break
 			}
 		}
-		m.InUse = false
 	}
 	closure <- 1
 }
 
 func downloadFile(m *Mirror, hash, size, url, output string) error {
 	resp, err := m.Client.Get(url)
+	defer func() { m.InUse = false }()
 	if err != nil {
 		log.Println("Error in HTTP get request", err)
 		return err
@@ -188,7 +195,7 @@ func downloadFile(m *Mirror, hash, size, url, output string) error {
 				}
 				return nil
 			}
-			hashInterface = getHash(hash)
+			hashInterface.Reset()
 		}
 		os.Remove(output)
 	}
