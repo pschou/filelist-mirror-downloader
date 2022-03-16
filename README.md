@@ -4,13 +4,19 @@ This shim takes a file list and a mirror list and downloads the files in the fil
 while doing checksums and parallel downloads for speed.
 
 # Example usage:
+CentOS / Yum repo
 ```bash
-./filelist-mirror-downloader -output output
+./filelist-mirror-downloader -mirrors yum_mirrorlist.txt -list yum_filelist.txt -output yumrepo_test
+```
+
+Alpine repo
+```bash
+./filelist-mirror-downloader -mirrors alpine_mirrorlist.txt -list alpine_filelist.txt -output alpine_test
 ```
 
 Threaded download:
 ```bash
-./filelist-mirror-downloader -list filelist2.txt -debug -output testout -threads 2
+./filelist-mirror-downloader -mirrors yum_mirrorlist.txt -list yum_filelist.txt -threads 2 -output yumrepo_test
 ```
 
 # Usage help:

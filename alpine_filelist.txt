@@ -1,0 +1,2 @@
+{alpine}Q1oHg4kAnVFve7dHe30IKgyaCykSg= 2518 /latest-stable/main/x86_64/postfix-openrc-3.6.4-r0.apk
+{alpine}Q1MI+/FxrA6YwZrf1omL9XEzX5zws= 6270 /latest-stable/main/x86_64/perl-class-accessor-chained-doc-0.01-r2.apk

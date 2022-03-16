@@ -268,6 +268,8 @@ func getHash(hash string) hash.Hash {
 	switch {
 	case strings.HasPrefix(hash, "{sha256}"):
 		return sha256.New()
+	case strings.HasPrefix(hash, "{alpine}"):
+		return NewWithExpectedHash(hash[8:])
 	}
 	return nil
 }
@@ -276,6 +278,10 @@ func checkHash(hash string, h hash.Hash) error {
 	switch {
 	case strings.HasPrefix(hash, "{sha256}"):
 		if strings.EqualFold(strings.TrimPrefix(hash, "{sha256}"), fmt.Sprintf("%x", h.Sum(nil))) {
+			return nil
+		}
+	case strings.HasPrefix(hash, "{alpine}"):
+		if strings.EqualFold(strings.TrimPrefix(hash, "{alpine}"), fmt.Sprintf("%s", h.Sum(nil))) {
 			return nil
 		}
 	}
