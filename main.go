@@ -17,6 +17,7 @@ package main
 import (
 	"bufio"
 	"crypto/sha256"
+	"crypto/sha512"
 	"flag"
 	"fmt"
 	"hash"
@@ -268,6 +269,8 @@ func getHash(hash string) hash.Hash {
 	switch {
 	case strings.HasPrefix(hash, "{sha256}"):
 		return sha256.New()
+	case strings.HasPrefix(hash, "{sha512}"):
+		return sha512.New()
 	case strings.HasPrefix(hash, "{alpine}"):
 		return NewWithExpectedHash(hash[8:])
 	}
@@ -278,6 +281,10 @@ func checkHash(hash string, h hash.Hash) error {
 	switch {
 	case strings.HasPrefix(hash, "{sha256}"):
 		if strings.EqualFold(strings.TrimPrefix(hash, "{sha256}"), fmt.Sprintf("%x", h.Sum(nil))) {
+			return nil
+		}
+	case strings.HasPrefix(hash, "{sha512}"):
+		if strings.EqualFold(strings.TrimPrefix(hash, "{sha512}"), fmt.Sprintf("%x", h.Sum(nil))) {
 			return nil
 		}
 	case strings.HasPrefix(hash, "{alpine}"):
