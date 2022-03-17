@@ -45,7 +45,7 @@ func main() {
 	var mirrorList = flag.String("mirrors", "mirrorlist.txt", "Mirror / directory list of prefixes to use")
 	var outputPath = flag.String("output", ".", "Path to put the repo files")
 	var threads = flag.Int("threads", 1, "Concurrent downloads")
-	attempts = flag.Int("attempts", 5, "Attempts for each file")
+	attempts = flag.Int("attempts", 10, "Attempts for each file")
 	shuffleAfter = flag.Int("shuffle", 10, "Shuffle the mirror list ever N downloads")
 	var fileList = flag.String("list", "filelist.txt", "Filelist to be fetched (one per line with: HASH SIZE PATH)")
 	debug = flag.Bool("debug", false, "Turn on debug comments")
@@ -148,7 +148,7 @@ func worker(mirrors MirrorList, jobs <-chan string, outputPath string, closure c
 		for len(skip) < *attempts {
 			m := mirrors.PopWithout(skip)
 			if m == nil {
-				fmt.Println("  no additional mirrors to try")
+				fmt.Println("  Exhausted the mirror list, no additional mirrors to try")
 				break
 			}
 			url := m.URL + "/" + strings.TrimPrefix(parts[2], "/")
@@ -215,7 +215,7 @@ func downloadFile(m *Mirror, hash, size, url, output string) error {
 				}
 				return nil
 			}
-			hashInterface.Reset()
+			hashInterface = getHash(hash)
 		}
 		os.Remove(output)
 	}
@@ -273,6 +273,10 @@ func getHash(hash string) hash.Hash {
 		return sha512.New()
 	case strings.HasPrefix(hash, "{alpine}"):
 		return NewWithExpectedHash(hash[8:])
+	default:
+		if *debug {
+			fmt.Println("Unknown hash type:", hash)
+		}
 	}
 	return nil
 }

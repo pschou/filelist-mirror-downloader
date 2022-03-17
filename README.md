@@ -11,7 +11,7 @@ CentOS / Yum repo
 
 Alpine repo
 ```bash
-./filelist-mirror-downloader -mirrors alpine_mirrorlist.txt -list alpine_filelist.txt -output alpine_test
+./filelist-mirror-downloader -mirrors alpine_mirrorlist.txt -list alpine_filelist.txt -output alpine_test -debug -attempts 15
 ```
 
 Threaded download:

@@ -62,9 +62,9 @@ func (m MirrorList) Less(i, j int) bool {
 func (m MirrorList) Print() {
 	MirrorListSync.Lock()
 	defer MirrorListSync.Unlock()
-	fmt.Println(" #  Weight Latency Fails Rand Use URL")
+	fmt.Println(" #  Weight Latency Fails   Rand Use  URL")
 	for i, e := range m {
-		fmt.Printf("%2d) %6.02f %6.02f %6d %6.02f %b  %s\n", i, e.Latency+float64(e.Failures)*20+e.Random, e.Latency, e.Failures, e.Random, e.InUse, e.URL)
+		fmt.Printf("%2d) %6.02f %6.02f %6d %6.02f %t %s\n", i, e.Latency+float64(e.Failures)*20+e.Random, e.Latency, e.Failures, e.Random, e.InUse, e.URL)
 	}
 }
 func (m MirrorList) Shuffle() {
