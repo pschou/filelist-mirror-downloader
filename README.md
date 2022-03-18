@@ -19,6 +19,11 @@ Threaded download:
 ./filelist-mirror-downloader -mirrors yum_mirrorlist.txt -list yum_filelist.txt -threads 2 -output yumrepo_test
 ```
 
+Just test the validity of the downloads:
+```bash
+./filelist-mirror-downloader -list alpine_filelist.txt -output alpine_test -test ; echo $?
+```
+
 # Usage help:
 ```bash
 $ ./filelist-mirror-downloader -h
