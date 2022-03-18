@@ -273,7 +273,7 @@ func downloadFile(m *Mirror, hash, size, url, output string) error {
 	for readErr != io.EOF {
 		// read from webserver
 		readBytes, readErr = resp.Body.Read(buf)
-		if readErr != nil && *debug {
+		if readErr != nil && readErr != io.EOF && *debug {
 			fmt.Println("  Error on reading:", readErr, "with bytes", readBytes)
 		}
 
