@@ -1,105 +1,52 @@
 http://dl-cdn.alpinelinux.org/alpine
 http://uk.alpinelinux.org/alpine
-# latency: 194.168725ms
 http://dl-4.alpinelinux.org/alpine
-# latency: 192.400793ms
 http://dl-5.alpinelinux.org/alpine
-# latency: 192.223505ms
 http://mirror.yandex.ru/mirrors/alpine
-# latency: 240.821244ms
 http://mirrors.gigenet.com/alpinelinux
-# latency: 52.586485ms
 http://mirror1.hs-esslingen.de/pub/Mirrors/alpine
-# latency: 210.885113ms
 http://mirror.leaseweb.com/alpine
-# latency: 21.941285ms
 http://mirror.fit.cvut.cz/alpine
-# latency: 211.292242ms
 http://alpine.mirror.wearetriple.com
-# latency: 182.191808ms
 http://mirror.aarnet.edu.au/pub/alpine
-# latency: 456.770668ms
 http://mirrors.dotsrc.org/alpine
-# latency: 212.209893ms
 http://ftp.halifax.rwth-aachen.de/alpine
-# latency: 223.787423ms
 http://ftp.acc.umu.se/mirror/alpinelinux.org
-# latency: 239.177787ms
 http://mirror.csclub.uwaterloo.ca/alpine
-# latency: 203.627055ms
 http://alpinelinux.mirror.iweb.com
-# latency: 40.632685ms
 http://pkg.adfinis.com/alpine
-# latency: 191.573567ms
 http://mirror.ps.kz/alpine
-# latency: 331.846642ms
 http://mirror.rise.ph/alpine-linux
-# latency: 570.565879ms
 http://mirrors.ircam.fr/pub/alpine
-# latency: 361.577744ms
 http://alpine.42.fr
-# latency: 273.559634ms
 http://mirror.math.princeton.edu/pub/alpinelinux
-# latency: 97.110715ms
 http://mirrors.sjtug.sjtu.edu.cn/alpine
-# latency: 1.356483828s
 http://mirror.ungleich.ch/mirror/packages/alpine
-# latency: 1.285032447s
 http://sjc.edge.kernel.org/alpine
-# latency: 160.314631ms
 http://ewr.edge.kernel.org/alpine
-# latency: 33.244339ms
 http://ams.edge.kernel.org/alpine
-# latency: 205.286078ms
 http://download.nus.edu.sg/mirror/alpine
-# latency: 1.239758028s
 http://alpine.yourlabs.org
-# latency: 725.928952ms
 http://mirror.pit.teraswitch.com/alpine
-# latency: 81.750492ms
 http://mirror.reenigne.net/alpine
-# latency: 281.948624ms
 http://quantum-mirror.hu/mirrors/pub/alpine
-# latency: 530.991262ms
 http://tux.rainside.sk/alpine
-# latency: 616.309857ms
 http://alpine.cs.nctu.edu.tw
-# latency: 2.570443542s
 http://mirror.ihost.md/alpine
-# latency: 547.711045ms
-http://mirror.ette.biz/alpine
-# latency: 82.124938ms
 http://alpinelinux.c3sl.ufpr.br
-# latency: 1.093251082s
 http://alpine.ccns.ncku.edu.tw/alpine
-# latency: 3.060228037s
 http://mirror.dst.ca/alpine
-# latency: 82.160577ms
 http://mirror.kumi.systems/alpine
-# latency: 1.153604601s
 http://mirror.sabay.com.kh/alpine
-# latency: 1.296942208s
 http://alpine.northrepo.ca
-# latency: 100.14256ms
 http://alpine.bardia.tech
-# latency: 741.431958ms
 http://mirrors.ocf.berkeley.edu/alpine
-# latency: 253.628478ms
 http://mirrors.pardisco.co/alpine
-# latency: 532.288234ms
 http://mirrors.aliyun.com/alpine
-# latency: 1.000751348s
 http://mirror.alwyzon.net/alpine
-# latency: 362.785263ms
 http://ftpmirror2.infania.net/mirror/alpine
-# latency: 568.524691ms
 http://mirror.fcix.net/alpine
-# latency: 303.128408ms
 http://alpine.sakamoto.pl/alpine
-# latency: 344.290026ms
 http://mirror.2degrees.nz/alpine
-# latency: 751.805585ms
 http://mirror.kku.ac.th/alpine
-# latency: 1.806512619s
 http://mirror.uepg.br/alpine
-# latency: 1.107529593s
