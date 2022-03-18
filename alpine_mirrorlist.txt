@@ -1,5 +1,7 @@
 http://dl-cdn.alpinelinux.org/alpine
 http://uk.alpinelinux.org/alpine
+http://dl-2.alpinelinux.org/alpine
+http://dl-3.alpinelinux.org/alpine
 http://dl-4.alpinelinux.org/alpine
 http://dl-5.alpinelinux.org/alpine
 http://mirror.yandex.ru/mirrors/alpine
@@ -20,7 +22,6 @@ http://mirror.rise.ph/alpine-linux
 http://mirrors.ircam.fr/pub/alpine
 http://alpine.42.fr
 http://mirror.math.princeton.edu/pub/alpinelinux
-http://mirrors.sjtug.sjtu.edu.cn/alpine
 http://mirror.ungleich.ch/mirror/packages/alpine
 http://sjc.edge.kernel.org/alpine
 http://ewr.edge.kernel.org/alpine
@@ -33,6 +34,7 @@ http://quantum-mirror.hu/mirrors/pub/alpine
 http://tux.rainside.sk/alpine
 http://alpine.cs.nctu.edu.tw
 http://mirror.ihost.md/alpine
+http://mirror.ette.biz/alpine
 http://alpinelinux.c3sl.ufpr.br
 http://alpine.ccns.ncku.edu.tw/alpine
 http://mirror.dst.ca/alpine

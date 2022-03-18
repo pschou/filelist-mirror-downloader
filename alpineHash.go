@@ -64,7 +64,7 @@ func (a alpineHash) Write(p []byte) (n int, err error) {
 		}
 
 		pos := bytes.Index(dat[1:], gzip_header) + 1
-		if pos > 0 {
+		for pos > 0 && !*a.inData {
 			txt, err := gunzip(a.buff.Next(pos))
 			if err != nil {
 				return 0, err
@@ -72,6 +72,13 @@ func (a alpineHash) Write(p []byte) (n int, err error) {
 			switch {
 			case strings.HasPrefix(txt, ".SIGN.RSA."):
 				//fmt.Println("found rsa")
+				dat = a.buff.Bytes()
+				if !bytes.HasPrefix(dat, gzip_header) {
+					return 0, fmt.Errorf("Invalid APK file")
+				}
+
+				pos = bytes.Index(dat[1:], gzip_header) + 1
+
 			case strings.HasPrefix(txt, "./PaxHeaders/.PKGINFO"):
 				//fmt.Println("found pkginfo")
 				*a.inData = true
@@ -91,9 +98,9 @@ func (a alpineHash) Write(p []byte) (n int, err error) {
 			}
 		}
 
-		if a.buff.Len() > 10000 {
-			return 0, fmt.Errorf("APK file in wrong format, missing header")
-		}
+		//if a.buff.Len() > 10000 {
+		//	return 0, fmt.Errorf("APK file in wrong format, missing header")
+		//}
 	}
 	return
 }

@@ -27,7 +27,9 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/exec"
 	"path"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -36,6 +38,9 @@ var version = "test"
 var debug *bool
 var attempts, shuffleAfter *int
 var returnInt int
+var getDisk, getMirror, getFails int
+
+var useList MirrorList // List of mirrors to use
 
 // HelloGet is an HTTP Cloud Function.
 func main() {
@@ -47,12 +52,30 @@ func main() {
 	var mirrorList = flag.String("mirrors", "mirrorlist.txt", "Mirror / directory list of prefixes to use")
 	var outputPath = flag.String("output", ".", "Path to put the repo files")
 	var threads = flag.Int("threads", 4, "Concurrent downloads")
-	attempts = flag.Int("attempts", 10, "Attempts for each file")
-	shuffleAfter = flag.Int("shuffle", 10, "Shuffle the mirror list ever N downloads")
+	attempts = flag.Int("attempts", 20, "Attempts for each file")
+	shuffleAfter = flag.Int("shuffle", 100, "Shuffle the mirror list ever N downloads")
 	var fileList = flag.String("list", "filelist.txt", "Filelist to be fetched (one per line with: HASH SIZE PATH)")
 	debug = flag.Bool("debug", false, "Turn on debug comments")
 
 	flag.Parse()
+
+	fmt.Println("Press [m] mirror list  [s] stats")
+	go func() {
+		// disable input buffering
+		exec.Command("stty", "-F", "/dev/tty", "cbreak", "min", "1").Run()
+		// do not display entered characters on the screen
+		//exec.Command("stty", "-F", "/dev/tty", "-echo").Run()
+		var b []byte = make([]byte, 1)
+		for {
+			os.Stdin.Read(b)
+			switch b[0] {
+			case 'm':
+				useList.Print()
+			case 's':
+				fmt.Println("Counts,  Disk:", getDisk, "Mirror:", getMirror, "Fails:", getFails)
+			}
+		}
+	}()
 
 	// Create the directory if needed
 	err := ensureDir(*outputPath)
@@ -62,7 +85,8 @@ func main() {
 
 	mirrors := readMirrors(*mirrorList)
 	var tmp string
-	var useList MirrorList // List of mirrors to use
+
+	fmt.Println("Loaded", len(mirrors), "testing latencies and connectivity...")
 
 	// Test speeds
 	for i, m := range mirrors {
@@ -78,9 +102,9 @@ func main() {
 
 			var netTransport = &http.Transport{
 				Dial: (&net.Dialer{
-					Timeout: 15 * time.Second,
+					Timeout: 60 * time.Second,
 				}).Dial,
-				TLSHandshakeTimeout: 15 * time.Second,
+				TLSHandshakeTimeout: 30 * time.Second,
 			}
 
 			useList = append(useList, Mirror{
@@ -88,7 +112,7 @@ func main() {
 				URL:     m,
 				Latency: delta,
 				Client: http.Client{
-					Timeout:   5 * time.Second,
+					Timeout:   15 * time.Second,
 					Transport: netTransport,
 				},
 			})
@@ -103,7 +127,7 @@ func main() {
 	jobs := make(chan string, *threads)
 	closure := make(chan int, *threads)
 	for w := 1; w <= *threads; w++ {
-		go worker(useList, jobs, *outputPath, closure)
+		go worker(jobs, *outputPath, closure)
 	}
 
 	file, err := os.Open(*fileList)
@@ -121,7 +145,7 @@ func main() {
 			i++
 			if i%(*shuffleAfter) == 0 {
 				// Sort the mirror list by weight, latency + failures + random
-				useList.Shuffle()
+				Shuffle()
 
 				if *debug {
 					fmt.Println("Mirror list:")
@@ -141,6 +165,9 @@ func main() {
 		<-closure // ensure all the threads are closed
 	}
 
+	if returnInt == 0 {
+		fmt.Println("Successfully downloaded the entire repo")
+	}
 	os.Exit(returnInt)
 }
 
@@ -148,30 +175,40 @@ var client = http.Client{
 	Timeout: 5 * time.Second,
 }
 
-func worker(mirrors MirrorList, jobs <-chan string, outputPath string, closure chan<- int) {
+func worker(jobs <-chan string, outputPath string, closure chan<- int) {
 	for j := range jobs {
 		parts := strings.SplitN(j, " ", 3)
 		if len(parts) < 3 {
 			fmt.Println("Invalid format for input file list")
 		}
+		size, err := strconv.Atoi(parts[1])
+		if err != nil {
+			fmt.Println("invalid file size", parts[1], "for", parts[2])
+		}
 		output := path.Join(outputPath, parts[2])
 		skip := []int{}
 		for len(skip) < *attempts {
-			m := mirrors.PopWithout(skip)
+			m := PopWithout(skip)
 			if m == nil {
-				fmt.Println("  Exhausted the mirror list, no additional mirrors to try")
+				fmt.Println("  Exhausted the mirror list", parts[2], skip)
+				returnInt = 1
+				useList.Print()
 				break
 			}
 			url := m.URL + "/" + strings.TrimPrefix(parts[2], "/")
 			if *debug {
 				fmt.Println("Downloading file", url, "to", output)
 			}
-			err := downloadFile(m, parts[0], parts[1], url, output)
+			err := downloadFile(m, parts[0], size, url, output)
+			ClearUse(m.ID)
 			if err != nil {
 				skip = append(skip, m.ID)
-				fmt.Println("  Error:", err)
+				//fmt.Println("  Error:", err, "on", url, "using mirror id", m.ID)
+				//fmt.Printf("  skip list: %+v\n", skip)
+				//useList.Print()
 				m.Failures++
-				m.mirrors.Shuffle()
+				getFails++
+				Shuffle()
 			} else {
 				if *debug {
 					fmt.Println("  Success on", url)
@@ -180,20 +217,73 @@ func worker(mirrors MirrorList, jobs <-chan string, outputPath string, closure c
 			}
 		}
 		if len(skip) == *attempts {
+			fmt.Println("  Exhausted the retries", parts[2], skip)
 			returnInt = 1
 		}
 	}
 	closure <- 1
 }
 
-func downloadFile(m *Mirror, hash, size, url, output string) error {
+func downloadFile(m *Mirror, hash string, size int, url, output string) error {
 	success := false
 	defer func() {
-		m.InUse = false
 		if !success {
 			os.Remove(output)
 		}
 	}()
+
+	dir, _ := path.Split(output)
+
+	// Create the directory if needed
+	err := ensureDir(dir)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Check if file exists
+	fileStat, err := os.Stat(output)
+	if err == nil {
+		if fileStat.IsDir() {
+			fmt.Println("  File is directory", output)
+			log.Fatal(err)
+		}
+		if int(fileStat.Size()) != size {
+			if *debug {
+				fmt.Println("  Mismatched size of file", output)
+			}
+		} else {
+			file, err := os.Open(output)
+			if err != nil {
+				return err
+			}
+			if *debug {
+				fmt.Println("  Found file:", output)
+			}
+			hashInterface := getHash(hash)
+			io.Copy(hashInterface, file)
+			file.Close()
+
+			// Check the hash and return any errors
+			err = checkHash(hash, hashInterface)
+			if err == nil {
+				if *debug {
+					fmt.Println("  Skipping, found valid file:", output)
+				}
+				getDisk++
+				success = true
+				return nil
+			} else {
+				fmt.Println("hash check failed", output, "hash:", hash, "err:", err)
+			}
+		}
+		os.Remove(output)
+	}
+
+	hashInterface := getHash(hash)
+	if hashInterface == nil {
+		return fmt.Errorf("Unknown hash type for: %s", hash)
+	}
+
 	//resp, err := m.Client.Get(url)
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -201,7 +291,7 @@ func downloadFile(m *Mirror, hash, size, url, output string) error {
 		return err
 	}
 
-	ctx, cancel := context.WithTimeout(req.Context(), 15*time.Second)
+	ctx, cancel := context.WithTimeout(req.Context(), 60*time.Second)
 	defer cancel()
 
 	req = req.WithContext(ctx)
@@ -214,55 +304,11 @@ func downloadFile(m *Mirror, hash, size, url, output string) error {
 	}
 	defer resp.Body.Close()
 
-	dir, _ := path.Split(output)
-	hashInterface := getHash(hash)
-
-	// Create the directory if needed
-	err = ensureDir(dir)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	// Check if file exists
-	fileStat, err := os.Stat(output)
-	if err == nil {
-		if fileStat.IsDir() {
-			fmt.Println("  File is directory", output)
-			log.Fatal(err)
-		}
-		if fmt.Sprintf("%d", fileStat.Size()) != size {
-			if *debug {
-				fmt.Println("  Mismatched size of file", output)
-			}
-		} else {
-			file, err := os.Open(output)
-			if err != nil {
-				return err
-			}
-			if *debug {
-				fmt.Println("  Found file:", output)
-			}
-			io.Copy(hashInterface, file)
-			if checkHash(hash, hashInterface) == nil {
-				if *debug {
-					fmt.Println("  Skipping, found valid file:", output)
-				}
-				success = true
-				return nil
-			}
-			hashInterface = getHash(hash)
-		}
-		os.Remove(output)
-	}
-
 	file, err := os.Create(output)
 	if err != nil {
 		return err
 	}
 
-	if hashInterface == nil {
-		return fmt.Errorf("Unknown hash type for: %s", hash)
-	}
 	buf := make([]byte, 10000)
 	var readBytes, fileSize int
 	var readErr error
@@ -273,6 +319,12 @@ func downloadFile(m *Mirror, hash, size, url, output string) error {
 	for readErr != io.EOF {
 		// read from webserver
 		readBytes, readErr = resp.Body.Read(buf)
+		if fileSize+readBytes > size {
+			readBytes = size - fileSize
+			readErr = io.EOF
+		}
+		fileSize += readBytes
+
 		if readErr != nil && readErr != io.EOF && *debug {
 			fmt.Println("  Error on reading:", readErr, "with bytes", readBytes)
 		}
@@ -292,7 +344,6 @@ func downloadFile(m *Mirror, hash, size, url, output string) error {
 		if err != nil {
 			return err
 		}
-		fileSize += readBytes
 
 		_, err = file.Write(buf[:readBytes])
 		if err != nil {
@@ -305,17 +356,17 @@ func downloadFile(m *Mirror, hash, size, url, output string) error {
 		}
 	}
 
-	if fmt.Sprintf("%d", fileSize) != size {
+	if fileSize != size {
 		os.Remove(output)
 		return fmt.Errorf("Size mismatch, %d != %s", fileSize, size)
 	}
 
 	// Check the hash and return any errors
 	err = checkHash(hash, hashInterface)
-	if err != nil {
-		os.Remove(output)
+	if err == nil {
+		getMirror++
+		success = true
 	}
-	success = true
 	return nil
 }
 
@@ -346,6 +397,7 @@ func checkHash(hash string, h hash.Hash) error {
 			return nil
 		}
 	case strings.HasPrefix(hash, "{alpine}"):
+		//fmt.Println("fn hash check", strings.TrimPrefix(hash, "{alpine}"), fmt.Sprintf("%s", h.Sum(nil)))
 		if strings.EqualFold(strings.TrimPrefix(hash, "{alpine}"), fmt.Sprintf("%s", h.Sum(nil))) {
 			return nil
 		}

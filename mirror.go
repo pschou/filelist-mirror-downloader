@@ -19,8 +19,8 @@ type Mirror struct {
 	Random   float64
 	Failures int
 	Client   http.Client
-	InUse    bool
-	mirrors  MirrorList
+	inUse    bool
+	//mirrors  *MirrorList
 }
 
 func readMirrors(mirrorFile string) []string {
@@ -62,58 +62,51 @@ func (m MirrorList) Less(i, j int) bool {
 func (m MirrorList) Print() {
 	MirrorListSync.Lock()
 	defer MirrorListSync.Unlock()
-	fmt.Println(" #  Weight Latency Fails   Rand Use  URL")
-	for i, e := range m {
-		fmt.Printf("%2d) %6.02f %6.02f %6d %6.02f %t %s\n", i, e.Latency+float64(e.Failures)*20+e.Random, e.Latency, e.Failures, e.Random, e.InUse, e.URL)
+	fmt.Println(" #  Weight Latency Fails   Rand InUse URL")
+	for _, e := range m {
+		fmt.Printf("%2d) %6.02f %6.02f %6d %6.02f %t %s\n", e.ID, e.Latency+float64(e.Failures)*20+e.Random, e.Latency, e.Failures, e.Random, e.inUse, e.URL)
 	}
 }
-func (m MirrorList) Shuffle() {
+func Shuffle() {
 	MirrorListSync.Lock()
 	defer MirrorListSync.Unlock()
-	for i := range m {
-		if m[i].ID == 0 {
-			m[i].ID = i + 1
+	for i := range useList {
+		if useList[i].ID == 0 {
+			useList[i].ID = i + 1
 		}
-		m[i].Random = rand.Float64() * 40
-		m[i].mirrors = m
+		useList[i].Random = rand.Float64() * 40
+		//m[i].mirrors = &m
 	}
-	sort.Sort(m)
+	sort.Sort(useList)
 }
-func (m MirrorList) Pop() *Mirror {
+
+func ClearUse(id int) {
 	MirrorListSync.Lock()
 	defer MirrorListSync.Unlock()
-	for i := range m {
-		if m[i].InUse == false {
-			m[i].InUse = true
-			return &m[i]
-		}
-	}
-	return nil
-}
-func (m Mirror) ClearUse(id int) {
-	MirrorListSync.Lock()
-	defer MirrorListSync.Unlock()
-	for i := range m.mirrors {
-		if m.mirrors[i].ID == id {
-			m.mirrors[i].InUse = false
+	//m.inUse = false
+	for i := range useList {
+		if useList[i].ID == id {
+			useList[i].inUse = false
 			return
 		}
 	}
+	log.Fatal("Could not find mirror ID", id)
 }
-func (m MirrorList) PopWithout(skip []int) *Mirror {
+func PopWithout(skip []int) *Mirror {
 	MirrorListSync.Lock()
 	defer MirrorListSync.Unlock()
 	//fmt.Println("mirror list: %+v\n", m)
-poploop:
-	for i := range m {
+	for i := range useList {
+		use := true
 		for id := range skip {
-			if id == m[i].ID {
-				continue poploop
+			if id != useList[i].ID && useList[i].inUse == false {
+				use = false
+				break
 			}
 		}
-		if m[i].InUse == false {
-			m[i].InUse = true
-			return &m[i]
+		if use {
+			useList[i].inUse = true
+			return &useList[i]
 		}
 	}
 	return nil
