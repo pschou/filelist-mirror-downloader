@@ -118,6 +118,7 @@ func main() {
 			})
 		}
 	}
+	fmt.Println("Downloading file list using", len(useList), "mirrors...")
 
 	if len(useList) == 0 {
 		log.Fatal("No mirrors found")
