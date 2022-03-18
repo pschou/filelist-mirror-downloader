@@ -27,12 +27,12 @@ Just test the validity of the downloads:
 # Usage help:
 ```bash
 $ ./filelist-mirror-downloader -h
-Yum Get RepoMD,  Version: 0.1.20220315.1450
+Yum Get RepoMD,  Version: 0.1.20220318.1400
 
 Usage: ./filelist-mirror-downloader [options...]
 
   -attempts int
-        Attempts for each file (default 5)
+        Attempts for each file (default 20)
   -debug
         Turn on debug comments
   -list string
@@ -42,7 +42,11 @@ Usage: ./filelist-mirror-downloader [options...]
   -output string
         Path to put the repo files (default ".")
   -shuffle int
-        Shuffle the mirror list ever N downloads (default 10)
+        Shuffle the mirror list ever N downloads (default 100)
+  -test
+        Just validate downloaded files
   -threads int
-        Concurrent downloads (default 1)
+        Concurrent downloads (default 4)
+  -timeout int
+        Max connection time, in case a mirror slows significantly (default 300)
 ```
