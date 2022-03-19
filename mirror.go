@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 )
 
 type Mirror struct {
@@ -19,6 +20,8 @@ type Mirror struct {
 	Random   float64
 	Failures int
 	Client   http.Client
+	Bytes    int
+	Time     time.Duration
 	inUse    bool
 	//mirrors  *MirrorList
 }
@@ -62,9 +65,9 @@ func (m MirrorList) Less(i, j int) bool {
 func (m MirrorList) Print() {
 	MirrorListSync.Lock()
 	defer MirrorListSync.Unlock()
-	fmt.Println(" #  Weight Latency Fails   Rand InUse URL")
+	fmt.Println(" #  Weight Latency Fails   Rand InUse MBps URL")
 	for _, e := range m {
-		fmt.Printf("%2d) %6.02f %6.02f %6d %6.02f %t %s\n", e.ID, e.Latency+float64(e.Failures)*20+e.Random, e.Latency, e.Failures, e.Random, e.inUse, e.URL)
+		fmt.Printf("%2d) %6.02f %6.02f %6d %6.02f %t %5.1f %s\n", e.ID, e.Latency+float64(e.Failures)*20+e.Random, e.Latency, e.Failures, e.Random, e.inUse, float32(e.Bytes)/float32(e.Time)*1e3, e.URL)
 	}
 }
 func Shuffle() {
@@ -97,9 +100,12 @@ func PopWithout(skip []int) *Mirror {
 	defer MirrorListSync.Unlock()
 	//fmt.Println("mirror list: %+v\n", m)
 	for i := range useList {
+		if useList[i].inUse {
+			continue
+		}
 		use := true
 		for id := range skip {
-			if id != useList[i].ID && useList[i].inUse == false {
+			if id == useList[i].ID {
 				use = false
 				break
 			}

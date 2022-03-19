@@ -53,7 +53,7 @@ func main() {
 	var mirrorList = flag.String("mirrors", "mirrorlist.txt", "Mirror / directory list of prefixes to use")
 	var outputPath = flag.String("output", ".", "Path to put the repo files")
 	var threads = flag.Int("threads", 4, "Concurrent downloads")
-	attempts = flag.Int("attempts", 20, "Attempts for each file")
+	attempts = flag.Int("attempts", 40, "Attempts for each file")
 	var connTimeout = flag.Int("timeout", 300, "Max connection time, in case a mirror slows significantly")
 	shuffleAfter = flag.Int("shuffle", 100, "Shuffle the mirror list ever N downloads")
 	var fileList = flag.String("list", "filelist.txt", "Filelist to be fetched (one per line with: HASH SIZE PATH)")
@@ -63,7 +63,7 @@ func main() {
 	flag.Parse()
 
 	if !*testOnly {
-		fmt.Println("Press [m] mirror list  [s] stats")
+		fmt.Println("Press  [m] mirror list  [s] stats  [w] worker")
 		go func() {
 			// disable input buffering
 			exec.Command("stty", "-F", "/dev/tty", "cbreak", "min", "1").Run()
@@ -77,6 +77,12 @@ func main() {
 					useList.Print()
 				case 's':
 					fmt.Println("Counts,  Disk:", getDisk, "Mirror:", getMirror, "Fails:", getFails, "Recovered:", getRecover)
+				case 'w':
+					if len(worker_status) > 0 {
+						for i := 0; i < *threads; i++ {
+							fmt.Printf(" %d) %s\n", i+1, worker_status[i])
+						}
+					}
 				}
 			}
 		}()
@@ -132,8 +138,9 @@ func main() {
 	// Setup a worker group to do work!
 	jobs := make(chan string, *threads)
 	closure := make(chan int, *threads)
-	for w := 1; w <= *threads; w++ {
-		go worker(jobs, *outputPath, closure)
+	worker_status = make([]string, *threads)
+	for w := 0; w < *threads; w++ {
+		go worker(w, jobs, *outputPath, closure)
 	}
 
 	file, err := os.Open(*fileList)
@@ -175,7 +182,7 @@ func main() {
 		useList.Print()
 		fmt.Println("Counts,  Disk:", getDisk, "Mirror:", getMirror, "Fails:", getFails, "Recovered:", getRecover)
 		if returnInt == 0 {
-			fmt.Println("Successfully downloaded the entire repo")
+			fmt.Println("Successfully downloaded the entire repo into", *outputPath)
 		}
 	}
 	os.Exit(returnInt)
@@ -185,7 +192,9 @@ var client = http.Client{
 	Timeout: 5 * time.Second,
 }
 
-func worker(jobs <-chan string, outputPath string, closure chan<- int) {
+var worker_status []string
+
+func worker(thread int, jobs <-chan string, outputPath string, closure chan<- int) {
 	for j := range jobs {
 		parts := strings.SplitN(j, " ", 3)
 		if len(parts) < 3 {
@@ -198,24 +207,26 @@ func worker(jobs <-chan string, outputPath string, closure chan<- int) {
 		output := path.Join(outputPath, parts[2])
 		skip := []int{}
 		isFail := false
+		var url string
+		var m *Mirror
 		for len(skip) < *attempts {
-			var url string
-			var m *Mirror
 			if !*testOnly {
 				m = PopWithout(skip)
 				if m == nil {
-					fmt.Println("  Exhausted the mirror list", parts[2], skip)
+					//fmt.Println("  Exhausted the mirror list", parts[2], skip)
 					returnInt = 1
-					useList.Print()
+					//useList.Print()
 					break
 				}
 				url = m.URL + "/" + strings.TrimPrefix(parts[2], "/")
+				worker_status[thread] = fmt.Sprintf("%d ~~ %s", m.ID, output)
 				if *debug {
 					fmt.Println("Downloading file", url, "to", output)
 				}
 			}
 
 			err := downloadFile(m, parts[0], size, url, output)
+			worker_status[thread] = "waiting"
 
 			if *testOnly {
 				if err != nil {
@@ -336,6 +347,7 @@ func downloadFile(m *Mirror, hash string, size int, url, output string) error {
 
 	req = req.WithContext(ctx)
 
+	start := time.Now()
 	resp, err := m.Client.Do(req)
 
 	if err != nil {
@@ -359,6 +371,10 @@ func downloadFile(m *Mirror, hash string, size int, url, output string) error {
 	for readErr != io.EOF {
 		// read from webserver
 		readBytes, readErr = resp.Body.Read(buf)
+		m.Bytes += readBytes
+		tick := time.Now()
+		m.Time += tick.Sub(start)
+		start = tick
 		if fileSize+readBytes > size {
 			readBytes = size - fileSize
 			readErr = io.EOF
