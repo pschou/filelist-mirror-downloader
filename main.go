@@ -182,7 +182,7 @@ func main() {
 		useList.Print()
 		fmt.Println("Counts,  Disk:", getDisk, "Mirror:", getMirror, "Fails:", getFails, "Recovered:", getRecover)
 		if returnInt == 0 {
-			fmt.Println("Successfully downloaded the entire repo into", *outputPath)
+			fmt.Println("Successfully downloaded into", *outputPath)
 		}
 	}
 	os.Exit(returnInt)
