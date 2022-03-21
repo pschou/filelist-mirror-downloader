@@ -27,14 +27,16 @@ Just test the validity of the downloads:
 # Usage help:
 ```bash
 $ ./filelist-mirror-downloader -h
-Yum Get RepoMD,  Version: 0.1.20220318.1400
+Yum Get RepoMD,  Version: 0.1.20220320.2118
 
 Usage: ./filelist-mirror-downloader [options...]
 
   -attempts int
-        Attempts for each file (default 20)
+        Attempts for each file (default 40)
   -debug
         Turn on debug comments
+  -dup string
+        What to do with duplicates: omit, copy, symlink, hardlink (default "symlink")
   -list string
         Filelist to be fetched (one per line with: HASH SIZE PATH) (default "filelist.txt")
   -mirrors string
@@ -47,6 +49,6 @@ Usage: ./filelist-mirror-downloader [options...]
         Just validate downloaded files
   -threads int
         Concurrent downloads (default 4)
-  -timeout int
-        Max connection time, in case a mirror slows significantly (default 300)
+  -timeout duration
+        Max connection time, in case a mirror slows significantly (default 10m0s)
 ```

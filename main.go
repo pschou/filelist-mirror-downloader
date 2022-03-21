@@ -21,6 +21,7 @@ import (
 	"crypto/sha512"
 	"flag"
 	"fmt"
+	humanize "github.com/dustin/go-humanize"
 	"hash"
 	"io"
 	"log"
@@ -29,6 +30,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -40,10 +42,19 @@ var attempts, shuffleAfter *int
 var returnInt int
 var getDisk, getMirror, getFails, getRecover int
 var startTime = time.Now()
+var uniqueCount, totalCount int
+var totalBytes uint64
+var duplicates *string
 
 var useList MirrorList // List of mirrors to use
 
-// HelloGet is an HTTP Cloud Function.
+type FileEntry struct {
+	hash string
+	size int
+	path string
+	dups []string
+}
+
 func main() {
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Yum Get RepoMD,  Version: %s\n\nUsage: %s [options...]\n\n", version, os.Args[0])
@@ -54,13 +65,21 @@ func main() {
 	var outputPath = flag.String("output", ".", "Path to put the repo files")
 	var threads = flag.Int("threads", 4, "Concurrent downloads")
 	attempts = flag.Int("attempts", 40, "Attempts for each file")
-	var connTimeout = flag.Int("timeout", 300, "Max connection time, in case a mirror slows significantly")
+	var connTimeout = flag.Duration("timeout", 10*time.Minute, "Max connection time, in case a mirror slows significantly")
 	shuffleAfter = flag.Int("shuffle", 100, "Shuffle the mirror list ever N downloads")
 	var fileList = flag.String("list", "filelist.txt", "Filelist to be fetched (one per line with: HASH SIZE PATH)")
 	debug = flag.Bool("debug", false, "Turn on debug comments")
 	testOnly = flag.Bool("test", false, "Just validate downloaded files")
+	duplicates = flag.String("dup", "symlink", "What to do with duplicates: omit, copy, symlink, hardlink")
 
 	flag.Parse()
+
+	switch *duplicates {
+	case "omit", "copy", "symlink", "hardlink":
+	default:
+		fmt.Println("Invalid option for duplicates")
+		return
+	}
 
 	if !*testOnly {
 		fmt.Println("Press  [m] mirror list  [s] stats  [w] worker")
@@ -76,7 +95,13 @@ func main() {
 				case 'm':
 					useList.Print()
 				case 's':
-					fmt.Println("Counts,  Disk:", getDisk, "Mirror:", getMirror, "Fails:", getFails, "Recovered:", getRecover)
+					total := getDisk + getMirror + getRecover
+					percent := ""
+					if uniqueCount > 0 {
+						percent = fmt.Sprintf("%4.2f%%", 100.0*float32(total)/float32(uniqueCount))
+					}
+					fmt.Println("Stat:  OnDisk:", getDisk, "Downloaded:", getMirror, "Fails:",
+						getFails, "Recovered:", getRecover, "Progress:", total, "/", uniqueCount, percent)
 				case 'w':
 					if len(worker_status) > 0 {
 						for i := 0; i < *threads; i++ {
@@ -112,7 +137,7 @@ func main() {
 
 				var netTransport = &http.Transport{
 					Dial: (&net.Dialer{
-						Timeout: time.Duration(*connTimeout) * time.Second,
+						Timeout: *connTimeout,
 					}).Dial,
 					TLSHandshakeTimeout: 30 * time.Second,
 				}
@@ -136,7 +161,7 @@ func main() {
 	}
 
 	// Setup a worker group to do work!
-	jobs := make(chan string, *threads)
+	jobs := make(chan *FileEntry, *threads)
 	closure := make(chan int, *threads)
 	worker_status = make([]string, *threads)
 	for w := 0; w < *threads; w++ {
@@ -149,24 +174,60 @@ func main() {
 	}
 	defer file.Close()
 
-	// Read line one by one and send to threads
-	i := 0
+	// Read line one by one and add them to the FileEntry map
 	scanner := bufio.NewScanner(file)
+
+	fileEntries := []*FileEntry{}
+	fileMap := make(map[string]*FileEntry)
 	for scanner.Scan() {
 		line := scanner.Text()
+		// Split line by line of filelist
 		if strings.HasPrefix(line, "{") {
-			i++
-			if i%(*shuffleAfter) == 0 {
-				// Sort the mirror list by weight, latency + failures + random
-				Shuffle()
+			parts := strings.SplitN(line, " ", 3)
 
-				if *debug {
-					fmt.Println("Mirror list:")
-					useList.Print()
-				}
+			// If it is in an invalid format, skip
+			if len(parts) < 3 {
+				fmt.Println("Invalid format for input file list")
+				continue
 			}
-			jobs <- scanner.Text()
+
+			entry := FileEntry{}
+			entry.size, err = strconv.Atoi(parts[1])
+			if err != nil {
+				fmt.Println("invalid file size", parts[1], "for", parts[2])
+				continue
+			}
+			entry.hash = parts[0]
+			entry.path = strings.TrimSpace(parts[2])
+			mapstr := parts[1] + " " + parts[0]
+			if e, ok := fileMap[mapstr]; ok {
+				if e.path == entry.path {
+					continue
+				}
+				if *duplicates != "omit" {
+					e.dups = append(e.dups, entry.path)
+				}
+			} else {
+				uniqueCount++
+				totalBytes += uint64(entry.size)
+				fileMap[mapstr] = &entry
+				fileEntries = append(fileEntries, &entry)
+			}
+			totalCount++
 		}
+	}
+	fmt.Println("Files to be downloaded, Total:", totalCount, "Unique:", uniqueCount, "Size:", humanize.Bytes(totalBytes))
+	for i, entry := range fileEntries {
+		if i%(*shuffleAfter) == 0 {
+			// Sort the mirror list by weight, latency + failures + random
+			Shuffle()
+
+			if *debug {
+				fmt.Println("Mirror list:")
+				useList.Print()
+			}
+		}
+		jobs <- entry
 	}
 
 	if err := scanner.Err(); err != nil {
@@ -178,9 +239,64 @@ func main() {
 		<-closure // ensure all the threads are closed
 	}
 
+	// Now that we have all the needed downloads, make all the links / copies
+	for _, j := range fileEntries {
+		for _, ln := range j.dups {
+			from := path.Join(*outputPath, j.path)
+			to := path.Join(*outputPath, ln)
+			to_dir := filepath.Dir(to)
+			rel_from, err := filepath.Rel(to_dir, from)
+			//fmt.Println("from:", from, "to:", to, "rel:", rel_from)
+			if err != nil {
+				if *debug {
+					fmt.Println("relative path", err)
+				}
+				continue
+			}
+			err = ensureDir(to_dir)
+			if err != nil {
+				if *debug {
+					fmt.Println("ensure path", to_dir, "err:", err)
+				}
+				continue
+			}
+			switch *duplicates {
+			case "copy":
+				_, err = copyFile(from, to)
+				if err != nil {
+					if *debug {
+						fmt.Println("err copying file", err)
+					}
+					continue
+				}
+
+			case "hardlink":
+				err = os.Link(from, to)
+				if err != nil {
+					if *debug {
+						fmt.Println("err making link", err)
+					}
+					continue
+				}
+
+			case "symlink":
+				err = os.Symlink(rel_from, to)
+				if err != nil {
+					if *debug {
+						//fmt.Println("ln -s", rel_from, to)
+						fmt.Println("err making link", err)
+					}
+					continue
+				}
+			}
+		}
+	}
+
 	if !*testOnly {
 		useList.Print()
-		fmt.Println("Counts,  Disk:", getDisk, "Mirror:", getMirror, "Fails:", getFails, "Recovered:", getRecover)
+		total := getDisk + getMirror + getRecover
+		fmt.Println("Stat:  OnDisk:", getDisk, "Downloaded:", getMirror, "Fails:",
+			getFails, "Recovered:", getRecover, "Progress:", total, "/", uniqueCount)
 		if returnInt == 0 {
 			fmt.Println("Successfully downloaded into", *outputPath)
 		}
@@ -194,38 +310,35 @@ var client = http.Client{
 
 var worker_status []string
 
-func worker(thread int, jobs <-chan string, outputPath string, closure chan<- int) {
+// This function is called when the downloads are threaded.  It's intended
+// purpose is to loop over the FileEntry jobs which are sent over a channel to
+// the threads whenever one opens up to grab the next job.  Once the jobs
+// channel closes, the closure channel is used to make sure the threads are
+// fully completed before continuing in the main function.
+func worker(thread int, jobs <-chan *FileEntry, outputPath string, closure chan<- int) {
 	for j := range jobs {
-		parts := strings.SplitN(j, " ", 3)
-		if len(parts) < 3 {
-			fmt.Println("Invalid format for input file list")
-		}
-		size, err := strconv.Atoi(parts[1])
-		if err != nil {
-			fmt.Println("invalid file size", parts[1], "for", parts[2])
-		}
-		output := path.Join(outputPath, parts[2])
+		//fmt.Printf("j = %+v\n", j)
+		output := path.Join(outputPath, j.path)
 		skip := []int{}
 		isFail := false
 		var url string
 		var m *Mirror
-		for len(skip) < *attempts {
+		for len(skip) < *attempts && len(skip) < len(useList) {
 			if !*testOnly {
-				m = PopWithout(skip)
-				if m == nil {
-					//fmt.Println("  Exhausted the mirror list", parts[2], skip)
-					returnInt = 1
-					//useList.Print()
-					break
+				for m = PopWithout(skip); m == nil; m = PopWithout(skip) {
+					if *debug {
+						fmt.Println("  Waiting for a mirror to become available")
+					}
+					time.Sleep(3 * time.Second)
 				}
-				url = m.URL + "/" + strings.TrimPrefix(parts[2], "/")
+				url = m.URL + "/" + strings.TrimPrefix(j.path, "/")
 				worker_status[thread] = fmt.Sprintf("%d ~~ %s", m.ID, output)
 				if *debug {
 					fmt.Println("Downloading file", url, "to", output)
 				}
 			}
 
-			err := downloadFile(m, parts[0], size, url, output)
+			err := handleFile(m, j.hash, j.size, url, output)
 			worker_status[thread] = "waiting"
 
 			if *testOnly {
@@ -259,14 +372,16 @@ func worker(thread int, jobs <-chan string, outputPath string, closure chan<- in
 			}
 		}
 		if len(skip) == *attempts {
-			fmt.Println("  Exhausted the retries", parts[2], skip)
+			fmt.Println("  Exhausted the retries", j.path, skip)
 			returnInt = 1
 		}
 	}
 	closure <- 1
 }
 
-func downloadFile(m *Mirror, hash string, size int, url, output string) error {
+// The bulk of the work is done in this function, from testing the file on disk
+// to see if it is valid, to downloading the file from a given mirror.
+func handleFile(m *Mirror, hash string, size int, url, output string) error {
 	success := false
 	defer func() {
 		if !success {

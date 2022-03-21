@@ -3,6 +3,7 @@ module main
 go 1.16
 
 require (
-	github.com/ulikunitz/xz v0.5.10
-	golang.org/x/crypto v0.0.0-20220307211146-efcb8507fb70
+	github.com/dustin/go-humanize v1.0.0
+	github.com/ulikunitz/xz v0.5.10 // indirect
+	golang.org/x/crypto v0.0.0-20220307211146-efcb8507fb70 // indirect
 )
