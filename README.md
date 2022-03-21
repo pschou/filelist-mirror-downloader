@@ -44,7 +44,7 @@ Usage: ./filelist-mirror-downloader [options...]
   -output string
         Path to put the repo files (default ".")
   -shuffle int
-        Shuffle the mirror list ever N downloads (default 100)
+        Shuffle the mirror list every N downloads (default 100)
   -test
         Just validate downloaded files
   -threads int

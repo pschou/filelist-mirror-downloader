@@ -66,7 +66,7 @@ func main() {
 	var threads = flag.Int("threads", 4, "Concurrent downloads")
 	attempts = flag.Int("attempts", 40, "Attempts for each file")
 	var connTimeout = flag.Duration("timeout", 10*time.Minute, "Max connection time, in case a mirror slows significantly")
-	shuffleAfter = flag.Int("shuffle", 100, "Shuffle the mirror list ever N downloads")
+	shuffleAfter = flag.Int("shuffle", 100, "Shuffle the mirror list every N downloads")
 	var fileList = flag.String("list", "filelist.txt", "Filelist to be fetched (one per line with: HASH SIZE PATH)")
 	debug = flag.Bool("debug", false, "Turn on debug comments")
 	testOnly = flag.Bool("test", false, "Just validate downloaded files")
