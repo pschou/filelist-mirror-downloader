@@ -22,9 +22,21 @@ import (
 	"log"
 	"os"
 	"strings"
+	"sync"
 )
 
+var ensureDirMap = make(map[string]int8)
+var ensureDirSync sync.Mutex
+
 func ensureDir(dirName string) error {
+	ensureDirSync.Lock()
+	defer ensureDirSync.Unlock()
+
+	if _, ok := ensureDirMap[dirName]; ok {
+		return nil
+	}
+	ensureDirMap[dirName] = 1
+
 	err := os.MkdirAll(dirName, 0755)
 	if err == nil {
 		return nil
@@ -41,6 +53,27 @@ func ensureDir(dirName string) error {
 		return nil
 	}
 	return err
+}
+
+func isFile(name string) bool {
+	_, err := os.Stat(name)
+	if err == nil {
+		return true
+	}
+	if errors.Is(err, os.ErrNotExist) {
+		return false
+	}
+	return false
+}
+
+func isSymlink(filepath string) bool {
+	fi, err := os.Lstat(filepath)
+	if err != nil {
+		return false
+	}
+	// ..check err...
+	return fi.Mode()&os.ModeSymlink == os.ModeSymlink
+	// This is a symlink
 }
 
 func readFile(filePath string) string {

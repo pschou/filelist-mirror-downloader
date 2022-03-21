@@ -202,12 +202,24 @@ func main() {
 			mapstr := parts[1] + " " + parts[0]
 			if e, ok := fileMap[mapstr]; ok {
 				if e.path == entry.path {
+					// They are the same path, ignore this line entirely
 					continue
 				}
+				// We have been asked to not ignore duplicates
 				if *duplicates != "omit" {
+					if (isFile(e.path) && !isFile(entry.path)) ||
+						(isSymlink(e.path) && !isSymlink(entry.path)) {
+						// Flip the entries if one exists and the other doesn't, or
+						// Keep to checking the linked-to-file instead of the link
+						e.path, entry.path = entry.path, e.path
+					}
 					e.dups = append(e.dups, entry.path)
+					if *duplicates == "copy" {
+						totalBytes += uint64(entry.size)
+					}
 				}
 			} else {
+				// New entry, not already seen
 				uniqueCount++
 				totalBytes += uint64(entry.size)
 				fileMap[mapstr] = &entry
@@ -262,6 +274,7 @@ func main() {
 			}
 			switch *duplicates {
 			case "copy":
+				os.Remove(to)
 				_, err = copyFile(from, to)
 				if err != nil {
 					if *debug {
@@ -271,6 +284,7 @@ func main() {
 				}
 
 			case "hardlink":
+				os.Remove(to)
 				err = os.Link(from, to)
 				if err != nil {
 					if *debug {
@@ -280,6 +294,9 @@ func main() {
 				}
 
 			case "symlink":
+				//if isSymlink(to) {
+				os.Remove(to)
+				//}
 				err = os.Symlink(rel_from, to)
 				if err != nil {
 					if *debug {
@@ -548,7 +565,7 @@ func getHash(hash string) hash.Hash {
 	case strings.HasPrefix(hash, "{sha512}"):
 		return sha512.New()
 	case strings.HasPrefix(hash, "{alpine}"):
-		return NewWithExpectedHash(hash[8:])
+		return NewWithExpectedHash(strings.TrimPrefix(hash, "{alpine}"))
 	default:
 		if *debug {
 			fmt.Println("Unknown hash type:", hash)
@@ -569,7 +586,7 @@ func checkHash(hash string, h hash.Hash) error {
 		}
 	case strings.HasPrefix(hash, "{alpine}"):
 		//fmt.Println("fn hash check", strings.TrimPrefix(hash, "{alpine}"), fmt.Sprintf("%s", h.Sum(nil)))
-		if strings.EqualFold(strings.TrimPrefix(hash, "{alpine}"), fmt.Sprintf("%s", h.Sum(nil))) {
+		if strings.TrimPrefix(hash, "{alpine}") == fmt.Sprintf("%s", h.Sum(nil)) {
 			return nil
 		}
 	}
