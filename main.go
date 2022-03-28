@@ -543,6 +543,7 @@ func handleFile(m *Mirror, hash string, size int, url, output string) error {
 			return err
 		}
 	}
+	file.Close()
 
 	if fileSize != size {
 		os.Remove(output)
@@ -554,6 +555,11 @@ func handleFile(m *Mirror, hash string, size int, url, output string) error {
 	if err == nil {
 		getMirror++
 		success = true
+
+		resp.Header.Get("last-modified")
+		if time, err := http.ParseTime(resp.Header.Get("Last-Modified")); err == nil {
+			os.Chtimes(output, time, time)
+		}
 	}
 	return nil
 }
