@@ -228,7 +228,7 @@ func main() {
 			totalCount++
 		}
 	}
-	fmt.Println("Files to be downloaded, Total:", totalCount, "Unique:", uniqueCount, "Size:", humanize.Bytes(totalBytes))
+	fmt.Println("# Files list stats -- Total:", totalCount, "Unique:", uniqueCount, "Size:", humanize.Bytes(totalBytes))
 	for i, entry := range fileEntries {
 		if i%(*shuffleAfter) == 0 {
 			// Sort the mirror list by weight, latency + failures + random
@@ -317,6 +317,10 @@ func main() {
 		if returnInt == 0 {
 			fmt.Println("Successfully downloaded into", *outputPath)
 		}
+	} else {
+		if returnInt == 0 {
+			fmt.Println("# Successfully checked all files", *outputPath)
+		}
 	}
 	os.Exit(returnInt)
 }
@@ -336,35 +340,35 @@ func worker(thread int, jobs <-chan *FileEntry, outputPath string, closure chan<
 	for j := range jobs {
 		//fmt.Printf("j = %+v\n", j)
 		output := path.Join(outputPath, j.path)
+		if *testOnly {
+			err := handleFile(nil, j.hash, j.size, "", output)
+			//fmt.Println("test", output)
+			if err != nil {
+				fmt.Printf("%s %d %s", j.hash, j.size, j.path)
+				returnInt = 1
+			}
+			break
+		}
+
 		skip := []int{}
 		isFail := false
 		var url string
 		var m *Mirror
 		for len(skip) < *attempts && len(skip) < len(useList) {
-			if !*testOnly {
-				for m = PopWithout(skip); m == nil; m = PopWithout(skip) {
-					if *debug {
-						fmt.Println("  Waiting for a mirror to become available")
-					}
-					time.Sleep(3 * time.Second)
-				}
-				url = m.URL + "/" + strings.TrimPrefix(j.path, "/")
-				worker_status[thread] = fmt.Sprintf("%d ~~ %s", m.ID, output)
+			for m = PopWithout(skip); m == nil; m = PopWithout(skip) {
 				if *debug {
-					fmt.Println("Downloading file", url, "to", output)
+					fmt.Println("  Waiting for a mirror to become available")
 				}
+				time.Sleep(3 * time.Second)
+			}
+			url = m.URL + "/" + strings.TrimPrefix(j.path, "/")
+			worker_status[thread] = fmt.Sprintf("%d ~~ %s", m.ID, output)
+			if *debug {
+				fmt.Println("Downloading file", url, "to", output)
 			}
 
 			err := handleFile(m, j.hash, j.size, url, output)
 			worker_status[thread] = "waiting"
-
-			if *testOnly {
-				if err != nil {
-					fmt.Println(output)
-					returnInt = 1
-				}
-				break
-			}
 
 			ClearUse(m.ID)
 			if err != nil {
@@ -425,7 +429,7 @@ func handleFile(m *Mirror, hash string, size int, url, output string) error {
 	if err == nil {
 		if fileStat.IsDir() {
 			fmt.Println("  File is directory", output)
-			return err
+			return fmt.Errorf("File is directory")
 		}
 		if int(fileStat.Size()) != size {
 			if *debug {
@@ -453,11 +457,16 @@ func handleFile(m *Mirror, hash string, size int, url, output string) error {
 				success = true
 				return nil
 			} else {
-				fmt.Println("hash check failed", output, "hash:", hash, "err:", err)
+				if *debug {
+					fmt.Println("hash check failed", output, "hash:", hash, "err:", err)
+				}
 			}
 		}
+		if *testOnly {
+			return fmt.Errorf("Invalid file")
+		}
 		if url == "" {
-			return err
+			return fmt.Errorf("url empty")
 		}
 		os.Remove(output)
 	}

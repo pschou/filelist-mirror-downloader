@@ -21,7 +21,10 @@ Threaded download:
 
 Just test the validity of the downloads:
 ```bash
-./filelist-mirror-downloader -list alpine_filelist.txt -output alpine_test -test ; echo $?
+# Test the downloads, note that the output is in the filelist format for missing or invalid files
+./filelist-mirror-downloader -list alpine_filelist.txt -output alpine_test -test
+# The return value will be 0 for success or 1 for any failures
+echo $?
 ```
 
 # Usage help:
