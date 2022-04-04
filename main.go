@@ -344,7 +344,7 @@ func worker(thread int, jobs <-chan *FileEntry, outputPath string, closure chan<
 			err := handleFile(nil, j.hash, j.size, "", output)
 			//fmt.Println("test", output)
 			if err != nil {
-				fmt.Printf("%s %d %s", j.hash, j.size, j.path)
+				fmt.Printf("%s %d %s\n", j.hash, j.size, j.path)
 				returnInt = 1
 			}
 			break
