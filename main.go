@@ -497,7 +497,8 @@ func handleFile(m *Mirror, hash string, size int, url, output string) error {
 	}
 	defer resp.Body.Close()
 
-	file, err := os.Create(output)
+	//file, err := os.Create(output)
+	file, err := os.OpenFile(output, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0664)
 	if err != nil {
 		return err
 	}
