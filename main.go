@@ -21,7 +21,6 @@ import (
 	"crypto/sha512"
 	"flag"
 	"fmt"
-	humanize "github.com/dustin/go-humanize"
 	"hash"
 	"io"
 	"log"
@@ -34,6 +33,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/araddon/dateparse"
+	humanize "github.com/dustin/go-humanize"
 )
 
 var version = "test"
@@ -45,6 +47,7 @@ var startTime = time.Now()
 var uniqueCount, totalCount int
 var totalBytes uint64
 var duplicates *string
+var after, before *time.Time
 
 var useList MirrorList // List of mirrors to use
 
@@ -59,6 +62,7 @@ func main() {
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Yum Get RepoMD,  Version: %s\n\nUsage: %s [options...]\n\n", version, os.Args[0])
 		flag.PrintDefaults()
+		fmt.Fprintf(os.Stderr, "Date formats supported: https://github.com/araddon/dateparse\n")
 	}
 
 	var mirrorList = flag.String("mirrors", "mirrorlist.txt", "Mirror / directory list of prefixes to use")
@@ -72,7 +76,25 @@ func main() {
 	testOnly = flag.Bool("test", false, "Just validate downloaded files")
 	duplicates = flag.String("dup", "symlink", "What to do with duplicates: omit, copy, symlink, hardlink")
 
+	var afterStr = flag.String("after", "", "Select packages after specified date")
+	var beforeStr = flag.String("before", "", "Select packages before specified date")
+
 	flag.Parse()
+
+	if *afterStr != "" {
+		t, err := dateparse.ParseLocal(*afterStr)
+		after = &t
+		if err != nil {
+			log.Fatal("Error parsing after date", err)
+		}
+	}
+	if *beforeStr != "" {
+		t, err := dateparse.ParseLocal(*beforeStr)
+		before = &t
+		if err != nil {
+			log.Fatal("Error parsing before date", err)
+		}
+	}
 
 	switch *duplicates {
 	case "omit", "copy", "symlink", "hardlink":
@@ -497,6 +519,14 @@ func handleFile(m *Mirror, hash string, size int, url, output string) error {
 	}
 	defer resp.Body.Close()
 
+	fileTime, fileTimeErr := http.ParseTime(resp.Header.Get("Last-Modified"))
+	if after != nil && fileTime.Before(*after) {
+		return nil
+	}
+	if before != nil && fileTime.After(*before) {
+		return nil
+	}
+
 	//file, err := os.Create(output)
 	file, err := os.OpenFile(output, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0664)
 	if err != nil {
@@ -566,9 +596,8 @@ func handleFile(m *Mirror, hash string, size int, url, output string) error {
 		getMirror++
 		success = true
 
-		resp.Header.Get("last-modified")
-		if time, err := http.ParseTime(resp.Header.Get("Last-Modified")); err == nil {
-			os.Chtimes(output, time, time)
+		if fileTimeErr == nil {
+			os.Chtimes(output, fileTime, fileTime)
 		}
 	}
 	return nil
