@@ -30,12 +30,16 @@ echo $?
 # Usage help:
 ```bash
 $ ./filelist-mirror-downloader -h
-Yum Get RepoMD,  Version: 0.1.20220320.2118
+Yum Get RepoMD,  Version: 0.1.20220411.1558
 
 Usage: ./filelist-mirror-downloader [options...]
 
+  -after string
+        Select packages after specified date
   -attempts int
         Attempts for each file (default 40)
+  -before string
+        Select packages before specified date
   -debug
         Turn on debug comments
   -dup string
@@ -54,4 +58,5 @@ Usage: ./filelist-mirror-downloader [options...]
         Concurrent downloads (default 4)
   -timeout duration
         Max connection time, in case a mirror slows significantly (default 10m0s)
+Date formats supported: https://github.com/araddon/dateparse
 ```
