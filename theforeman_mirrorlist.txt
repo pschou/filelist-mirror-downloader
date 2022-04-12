@@ -1,0 +1,3 @@
+https://yum.theforeman.org/releases
+https://yum.theforeman.org/releases
+https://yum.theforeman.org/releases
