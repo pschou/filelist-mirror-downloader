@@ -63,12 +63,14 @@ func main() {
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Yum Get RepoMD,  Version: %s\n\nUsage: %s [options...]\n\n", version, os.Args[0])
 		flag.PrintDefaults()
-		fmt.Fprintf(os.Stderr, "Date formats supported: https://github.com/araddon/dateparse\n")
+		//fmt.Fprintf(os.Stderr, "Date formats supported: https://github.com/araddon/dateparse\n")
 	}
 
 	var mirrorList = flag.String("mirrors", "mirrorlist.txt", "Mirror / directory list of prefixes to use")
 	var outputPath = flag.String("output", ".", "Path to put the repo files")
-	var logFilePath = flag.String("log", "", "File in which to store a log of files downloaded")
+	var logFilePath = flag.String("log", "", "File in which to store a log of files downloaded\n"+
+		"Line prefixes (OnDisk, OnDiskSkip, Skipped, Fetched), indicate action taken.\n"+
+		"Skip means that a file falls outside the required date bounds")
 	var threads = flag.Int("threads", 4, "Concurrent downloads")
 	attempts = flag.Int("attempts", 40, "Attempts for each file")
 	var connTimeout = flag.Duration("timeout", 10*time.Minute, "Max connection time, in case a mirror slows significantly")
@@ -78,8 +80,10 @@ func main() {
 	testOnly = flag.Bool("test", false, "Just validate downloaded files")
 	duplicates = flag.String("dup", "symlink", "What to do with duplicates: omit, copy, symlink, hardlink")
 
-	var afterStr = flag.String("after", "", "Select packages after specified date")
-	var beforeStr = flag.String("before", "", "Select packages before specified date")
+	var afterStr = flag.String("after", "", "Select packages after specified date\n"+
+		"Date formats supported: https://github.com/araddon/dateparse")
+	var beforeStr = flag.String("before", "", "Select packages before specified date\n"+
+		"Date formats supported: https://github.com/araddon/dateparse")
 
 	flag.Parse()
 
