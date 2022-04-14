@@ -428,6 +428,9 @@ func worker(thread int, jobs <-chan *FileEntry, outputPath string, closure chan<
 		}
 		if len(skip) == *attempts {
 			fmt.Println("  Exhausted the retries", j.path, skip)
+			if logFile != nil {
+				fmt.Fprintln(logFile, "Failed:", output)
+			}
 			returnInt = 1
 		}
 	}
@@ -488,9 +491,16 @@ func handleFile(m *Mirror, hash string, size int, url, output string) error {
 					fmt.Println("  Skipping, found valid file:", output)
 				}
 				getDisk++
+
 				if logFile != nil {
-					fmt.Fprintln(logFile, output)
+					stat, err := os.Stat(output)
+					if err == nil && ((after != nil && stat.ModTime().Before(*after)) || (before != nil && stat.ModTime().After(*before))) {
+						fmt.Fprintln(logFile, "OnDiskSkip:", output)
+					} else {
+						fmt.Fprintln(logFile, "OnDisk:", output)
+					}
 				}
+
 				success = true
 				return nil
 			} else {
@@ -536,10 +546,16 @@ func handleFile(m *Mirror, hash string, size int, url, output string) error {
 
 	fileTime, fileTimeErr := http.ParseTime(resp.Header.Get("Last-Modified"))
 	if after != nil && fileTime.Before(*after) {
+		if logFile != nil {
+			fmt.Fprintln(logFile, "Skipped:", output)
+		}
 		getSkip++
 		return nil
 	}
 	if before != nil && fileTime.After(*before) {
+		if logFile != nil {
+			fmt.Fprintln(logFile, "Skipped:", output)
+		}
 		getSkip++
 		return nil
 	}
@@ -612,7 +628,7 @@ func handleFile(m *Mirror, hash string, size int, url, output string) error {
 	if err == nil {
 		getMirror++
 		if logFile != nil {
-			fmt.Fprintln(logFile, output)
+			fmt.Fprintln(logFile, "Fetched:", output)
 		}
 		success = true
 
