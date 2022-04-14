@@ -48,6 +48,7 @@ var uniqueCount, totalCount int
 var totalBytes uint64
 var duplicates *string
 var after, before *time.Time
+var logFile *io.Writer
 
 var useList MirrorList // List of mirrors to use
 
@@ -67,6 +68,7 @@ func main() {
 
 	var mirrorList = flag.String("mirrors", "mirrorlist.txt", "Mirror / directory list of prefixes to use")
 	var outputPath = flag.String("output", ".", "Path to put the repo files")
+	var logFilePath = flag.String("log", "", "File in which to store a log of files downloaded")
 	var threads = flag.Int("threads", 4, "Concurrent downloads")
 	attempts = flag.Int("attempts", 40, "Attempts for each file")
 	var connTimeout = flag.Duration("timeout", 10*time.Minute, "Max connection time, in case a mirror slows significantly")
@@ -80,6 +82,14 @@ func main() {
 	var beforeStr = flag.String("before", "", "Select packages before specified date")
 
 	flag.Parse()
+
+	if *logFilePath != "" {
+		logFile, err := os.Create(*logFilePath)
+		if err != nil {
+			log.Fatal("Error creating log file:", err)
+		}
+		defer logFile.Close()
+	}
 
 	if *afterStr != "" {
 		t, err := dateparse.ParseLocal(*afterStr)
@@ -594,6 +604,9 @@ func handleFile(m *Mirror, hash string, size int, url, output string) error {
 	err = checkHash(hash, hashInterface)
 	if err == nil {
 		getMirror++
+		if logFile != nil {
+			fmt.Fprintln(*logFile, output)
+		}
 		success = true
 
 		if fileTimeErr == nil {

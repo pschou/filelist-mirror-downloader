@@ -30,7 +30,7 @@ echo $?
 # Usage help:
 ```bash
 $ ./filelist-mirror-downloader -h
-Yum Get RepoMD,  Version: 0.1.20220411.1558
+Yum Get RepoMD,  Version: 0.1.20220413.2011
 
 Usage: ./filelist-mirror-downloader [options...]
 
@@ -46,6 +46,8 @@ Usage: ./filelist-mirror-downloader [options...]
         What to do with duplicates: omit, copy, symlink, hardlink (default "symlink")
   -list string
         Filelist to be fetched (one per line with: HASH SIZE PATH) (default "filelist.txt")
+  -log string
+        File in which to store a log of files downloaded
   -mirrors string
         Mirror / directory list of prefixes to use (default "mirrorlist.txt")
   -output string
