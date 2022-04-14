@@ -73,7 +73,8 @@ func main() {
 		"Skip means that a file falls outside the required date bounds")
 	var threads = flag.Int("threads", 4, "Concurrent downloads")
 	attempts = flag.Int("attempts", 40, "Attempts for each file")
-	var connTimeout = flag.Duration("timeout", 10*time.Minute, "Max connection time, in case a mirror slows significantly")
+	var connTimeout = flag.Duration("timeout", 10*time.Minute, "Max connection time per file, in case a mirror slows significantly\n"+
+		"If one is downloading large ISO files, a longer time may be needed.")
 	shuffleAfter = flag.Int("shuffle", 100, "Shuffle the mirror list every N downloads")
 	var fileList = flag.String("list", "filelist.txt", "Filelist to be fetched (one per line with: HASH SIZE PATH)")
 	debug = flag.Bool("debug", false, "Turn on debug comments")
