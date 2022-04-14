@@ -42,13 +42,13 @@ var version = "test"
 var debug, testOnly *bool
 var attempts, shuffleAfter *int
 var returnInt int
-var getDisk, getMirror, getFails, getRecover int
+var getDisk, getMirror, getFails, getRecover, getSkip int
 var startTime = time.Now()
 var uniqueCount, totalCount int
 var totalBytes uint64
 var duplicates *string
 var after, before *time.Time
-var logFile *io.Writer
+var logFile *os.File
 
 var useList MirrorList // List of mirrors to use
 
@@ -84,10 +84,12 @@ func main() {
 	flag.Parse()
 
 	if *logFilePath != "" {
-		logFile, err := os.Create(*logFilePath)
+		var err error
+		logFile, err = os.Create(*logFilePath)
 		if err != nil {
 			log.Fatal("Error creating log file:", err)
 		}
+		defer logFile.Sync()
 		defer logFile.Close()
 	}
 
@@ -133,7 +135,7 @@ func main() {
 						percent = fmt.Sprintf("%4.2f%%", 100.0*float32(total)/float32(uniqueCount))
 					}
 					fmt.Println("Stat:  OnDisk:", getDisk, "Downloaded:", getMirror, "Fails:",
-						getFails, "Recovered:", getRecover, "Progress:", total, "/", uniqueCount, percent)
+						getFails, "Skipped:", getSkip, "Recovered:", getRecover, "Progress:", total, "/", uniqueCount, percent)
 				case 'w':
 					if len(worker_status) > 0 {
 						for i := 0; i < *threads; i++ {
@@ -345,7 +347,7 @@ func main() {
 		useList.Print()
 		total := getDisk + getMirror + getRecover
 		fmt.Println("Stat:  OnDisk:", getDisk, "Downloaded:", getMirror, "Fails:",
-			getFails, "Recovered:", getRecover, "Progress:", total, "/", uniqueCount)
+			getFails, "Skipped:", getSkip, "Recovered:", getRecover, "Progress:", total, "/", uniqueCount)
 		if returnInt == 0 {
 			fmt.Println("Successfully downloaded into", *outputPath)
 		}
@@ -486,6 +488,9 @@ func handleFile(m *Mirror, hash string, size int, url, output string) error {
 					fmt.Println("  Skipping, found valid file:", output)
 				}
 				getDisk++
+				if logFile != nil {
+					fmt.Fprintln(logFile, output)
+				}
 				success = true
 				return nil
 			} else {
@@ -531,9 +536,11 @@ func handleFile(m *Mirror, hash string, size int, url, output string) error {
 
 	fileTime, fileTimeErr := http.ParseTime(resp.Header.Get("Last-Modified"))
 	if after != nil && fileTime.Before(*after) {
+		getSkip++
 		return nil
 	}
 	if before != nil && fileTime.After(*before) {
+		getSkip++
 		return nil
 	}
 
@@ -605,7 +612,7 @@ func handleFile(m *Mirror, hash string, size int, url, output string) error {
 	if err == nil {
 		getMirror++
 		if logFile != nil {
-			fmt.Fprintln(*logFile, output)
+			fmt.Fprintln(logFile, output)
 		}
 		success = true
 
