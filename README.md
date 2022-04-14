@@ -29,8 +29,8 @@ echo $?
 
 # Usage help:
 ```bash
-$ ./filelist-mirror-downloader -h
-Yum Get RepoMD,  Version: 0.1.20220413.2147
+$ ./filelist-mirror-downloader  -h
+Yum Get RepoMD,  Version: 0.1.20220413.2152
 
 Usage: ./filelist-mirror-downloader [options...]
 
@@ -63,5 +63,6 @@ Usage: ./filelist-mirror-downloader [options...]
   -threads int
         Concurrent downloads (default 4)
   -timeout duration
-        Max connection time, in case a mirror slows significantly (default 10m0s)
+        Max connection time per file, in case a mirror slows significantly
+        If one is downloading large ISO files, a longer time may be needed. (default 10m0s)
 ```
