@@ -650,6 +650,8 @@ func getHash(hash string) hash.Hash {
 	switch {
 	case strings.HasPrefix(hash, "{sha1}"):
 		return sha1.New()
+	case strings.HasPrefix(hash, "{sha}"):
+		return sha1.New()
 	case strings.HasPrefix(hash, "{md5}"):
 		return md5.New()
 	case strings.HasPrefix(hash, "{sha256}"):
@@ -670,6 +672,10 @@ func checkHash(hash string, h hash.Hash) error {
 	switch {
 	case strings.HasPrefix(hash, "{sha1}"):
 		if strings.EqualFold(strings.TrimPrefix(hash, "{sha1}"), fmt.Sprintf("%x", h.Sum(nil))) {
+			return nil
+		}
+	case strings.HasPrefix(hash, "{sha}"):
+		if strings.EqualFold(strings.TrimPrefix(hash, "{sha}"), fmt.Sprintf("%x", h.Sum(nil))) {
 			return nil
 		}
 	case strings.HasPrefix(hash, "{md5}"):
