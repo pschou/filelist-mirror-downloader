@@ -17,6 +17,8 @@ package main
 import (
 	"bufio"
 	"context"
+	"crypto/md5"
+	"crypto/sha1"
 	"crypto/sha256"
 	"crypto/sha512"
 	"flag"
@@ -646,6 +648,10 @@ func handleFile(m *Mirror, hash string, size int, url, output string) error {
 
 func getHash(hash string) hash.Hash {
 	switch {
+	case strings.HasPrefix(hash, "{sha1}"):
+		return sha1.New()
+	case strings.HasPrefix(hash, "{md5}"):
+		return md5.New()
 	case strings.HasPrefix(hash, "{sha256}"):
 		return sha256.New()
 	case strings.HasPrefix(hash, "{sha512}"):
@@ -662,6 +668,14 @@ func getHash(hash string) hash.Hash {
 
 func checkHash(hash string, h hash.Hash) error {
 	switch {
+	case strings.HasPrefix(hash, "{sha1}"):
+		if strings.EqualFold(strings.TrimPrefix(hash, "{sha1}"), fmt.Sprintf("%x", h.Sum(nil))) {
+			return nil
+		}
+	case strings.HasPrefix(hash, "{md5}"):
+		if strings.EqualFold(strings.TrimPrefix(hash, "{md5}"), fmt.Sprintf("%x", h.Sum(nil))) {
+			return nil
+		}
 	case strings.HasPrefix(hash, "{sha256}"):
 		if strings.EqualFold(strings.TrimPrefix(hash, "{sha256}"), fmt.Sprintf("%x", h.Sum(nil))) {
 			return nil
