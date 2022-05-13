@@ -34,6 +34,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/araddon/dateparse"
@@ -68,6 +69,7 @@ func main() {
 		//fmt.Fprintf(os.Stderr, "Date formats supported: https://github.com/araddon/dateparse\n")
 	}
 
+	var background = flag.Bool("background", false, "Ignore all keyboard inputs, background mode")
 	var mirrorList = flag.String("mirrors", "mirrorlist.txt", "Mirror / directory list of prefixes to use")
 	var outputPath = flag.String("output", ".", "Path to put the repo files")
 	var logFilePath = flag.String("log", "", "File in which to store a log of files downloaded\n"+
@@ -123,35 +125,37 @@ func main() {
 	}
 
 	if !*testOnly {
-		fmt.Println("Press  [m] mirror list  [s] stats  [w] worker")
-		go func() {
-			// disable input buffering
-			exec.Command("stty", "-F", "/dev/tty", "cbreak", "min", "1").Run()
-			// do not display entered characters on the screen
-			//exec.Command("stty", "-F", "/dev/tty", "-echo").Run()
-			var b []byte = make([]byte, 1)
-			for {
-				os.Stdin.Read(b)
-				switch b[0] {
-				case 'm':
-					useList.Print()
-				case 's':
-					total := getDisk + getMirror + getRecover
-					percent := ""
-					if uniqueCount > 0 {
-						percent = fmt.Sprintf("%4.2f%%", 100.0*float32(total)/float32(uniqueCount))
-					}
-					fmt.Println("Stat:  OnDisk:", getDisk, "Downloaded:", getMirror, "Fails:",
-						getFails, "Skipped:", getSkip, "Recovered:", getRecover, "Progress:", total, "/", uniqueCount, percent)
-				case 'w':
-					if len(worker_status) > 0 {
-						for i := 0; i < *threads; i++ {
-							fmt.Printf(" %d) %s\n", i+1, worker_status[i])
+		if !*background {
+			fmt.Println("Press  [m] mirror list  [s] stats  [w] worker")
+			go func() {
+				// disable input buffering
+				exec.Command("stty", "-F", "/dev/tty", "cbreak", "min", "1").Run()
+				// do not display entered characters on the screen
+				//exec.Command("stty", "-F", "/dev/tty", "-echo").Run()
+				var b []byte = make([]byte, 1)
+				for {
+					os.Stdin.Read(b)
+					switch b[0] {
+					case 'm':
+						useList.Print()
+					case 's':
+						total := getDisk + getMirror + getRecover
+						percent := ""
+						if uniqueCount > 0 {
+							percent = fmt.Sprintf("%4.2f%%", 100.0*float32(total)/float32(uniqueCount))
+						}
+						fmt.Println("Stat:  OnDisk:", getDisk, "Downloaded:", getMirror, "Fails:",
+							getFails, "Skipped:", getSkip, "Recovered:", getRecover, "Progress:", total, "/", uniqueCount, percent)
+					case 'w':
+						if len(worker_status) > 0 {
+							for i := 0; i < *threads; i++ {
+								fmt.Printf(" %d) %s\n", i+1, worker_status[i])
+							}
 						}
 					}
 				}
-			}
-		}()
+			}()
+		}
 
 		// Create the directory if needed
 		err := ensureDir(*outputPath)
@@ -164,36 +168,48 @@ func main() {
 
 		fmt.Println("Loaded", len(mirrors), "testing latencies and connectivity...")
 
+		var wg sync.WaitGroup
+
 		// Test speeds
 		for i, m := range mirrors {
-			//repoPath := m + "/" + repoPath + "/"
-			//repomdPath := repoPath + "repodata/repomd.xml"
-			start := time.Now()
-			tmp = readFile(m)
-			delta := time.Now().Sub(start).Seconds() * 1000
-			if *debug {
-				fmt.Printf("%d) %.02f ms for %d bytes - %s\n", i, delta, len(tmp), m)
-			}
-			if delta < 4000 && len(tmp) > 100 {
+			wg.Add(1)
 
-				var netTransport = &http.Transport{
-					Dial: (&net.Dialer{
-						Timeout: *connTimeout,
-					}).Dial,
-					TLSHandshakeTimeout: 30 * time.Second,
+			go func() {
+				defer wg.Done()
+				if *debug {
+					fmt.Println("Starting test on", m)
 				}
+				//repoPath := m + "/" + repoPath + "/"
+				//repomdPath := repoPath + "repodata/repomd.xml"
+				start := time.Now()
+				tmp = readFile(m)
+				delta := time.Now().Sub(start).Seconds() * 1000
+				if *debug {
+					fmt.Printf("%d) %.02f ms for %d bytes - %s\n", i, delta, len(tmp), m)
+				}
+				if delta < 4000 && len(tmp) > 100 {
 
-				useList = append(useList, Mirror{
-					ID:      i + 1,
-					URL:     m,
-					Latency: delta,
-					Client: http.Client{
-						Timeout:   15 * time.Second,
-						Transport: netTransport,
-					},
-				})
-			}
+					var netTransport = &http.Transport{
+						Dial: (&net.Dialer{
+							Timeout: *connTimeout,
+						}).Dial,
+						TLSHandshakeTimeout: 30 * time.Second,
+					}
+
+					useList = append(useList, Mirror{
+						ID:      i + 1,
+						URL:     m,
+						Latency: delta,
+						Client: http.Client{
+							Timeout:   15 * time.Second,
+							Transport: netTransport,
+						},
+					})
+				}
+			}()
+			time.Sleep(70 * time.Millisecond)
 		}
+		wg.Wait()
 		fmt.Println("Downloading file list using", len(useList), "mirrors...")
 
 		if len(useList) == 0 {
