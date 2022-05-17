@@ -368,9 +368,13 @@ func main() {
 
 	for _, j := range fileEntries {
 		if !j.success {
-			//if *debug {
-			fmt.Println("Failed:", j.path)
-			//}
+			if *debug {
+				fmt.Println("Failed:", j.path)
+			}
+			if logFile != nil {
+				output := path.Join(*outputPath, j.path)
+				fmt.Fprintln(logFile, "Failed:", output)
+			}
 			returnInt = 1
 		}
 	}
@@ -462,9 +466,6 @@ func worker(thread int, jobs <-chan *FileEntry, outputPath string, closure chan<
 		}
 		if len(skip) == *attempts {
 			fmt.Println("  Exhausted the retries", j.path, skip)
-			if logFile != nil {
-				fmt.Fprintln(logFile, "Failed:", output)
-			}
 			returnInt = 1
 		}
 	}
