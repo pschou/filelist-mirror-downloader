@@ -20,9 +20,11 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net/http"
 	"os"
 	"strings"
 	"sync"
+	"time"
 )
 
 var ensureDirMap = make(map[string]int8)
@@ -94,7 +96,18 @@ func readFile(filePath string) string {
 		defer rawFile.Close()
 		file = rawFile
 	} else if strings.HasPrefix(filePath, "http") {
-		resp, err := client.Get(filePath)
+		var client = http.Client{
+			Timeout: 120 * time.Second,
+		}
+
+		req, err := http.NewRequest("GET", filePath, nil)
+		if err != nil {
+			log.Println("Error in building HTTP request", err)
+			return ""
+		}
+
+		req.Header.Set("User-Agent", "curl/7.29.0")
+		resp, err := client.Do(req)
 		if err != nil {
 			log.Println("Error in HTTP get request", err)
 			return ""

@@ -16,7 +16,6 @@ package main
 
 import (
 	"bufio"
-	"context"
 	"crypto/md5"
 	"crypto/sha1"
 	"crypto/sha256"
@@ -56,10 +55,11 @@ var logFile *os.File
 var useList MirrorList // List of mirrors to use
 
 type FileEntry struct {
-	hash string
-	size int
-	path string
-	dups []string
+	hash    string
+	size    int
+	path    string
+	dups    []string
+	success bool
 }
 
 func main() {
@@ -201,7 +201,7 @@ func main() {
 						URL:     m,
 						Latency: delta,
 						Client: http.Client{
-							Timeout:   15 * time.Second,
+							Timeout:   *connTimeout,
 							Transport: netTransport,
 						},
 					})
@@ -366,6 +366,15 @@ func main() {
 		}
 	}
 
+	for _, j := range fileEntries {
+		if !j.success {
+			//if *debug {
+			fmt.Println("Failed:", j.path)
+			//}
+			returnInt = 1
+		}
+	}
+
 	if !*testOnly {
 		useList.Print()
 		total := getDisk + getMirror + getRecover
@@ -380,10 +389,6 @@ func main() {
 		}
 	}
 	os.Exit(returnInt)
-}
-
-var client = http.Client{
-	Timeout: 5 * time.Second,
 }
 
 var worker_status []string
@@ -401,7 +406,9 @@ func worker(thread int, jobs <-chan *FileEntry, outputPath string, closure chan<
 			err := handleFile(nil, j.hash, j.size, "", output)
 			//fmt.Println("test", output)
 			if err != nil {
-				fmt.Printf("%s %d %s\n", j.hash, j.size, j.path)
+				if *debug {
+					fmt.Printf("%s %d %s %s\n", j.hash, j.size, j.path, err)
+				}
 				returnInt = 1
 			}
 			break
@@ -425,6 +432,9 @@ func worker(thread int, jobs <-chan *FileEntry, outputPath string, closure chan<
 			}
 
 			err := handleFile(m, j.hash, j.size, url, output)
+			if err != nil && *debug {
+				fmt.Printf("%s %d %s %s\n", j.hash, j.size, j.path, err)
+			}
 			worker_status[thread] = "waiting"
 
 			ClearUse(m.ID)
@@ -440,6 +450,7 @@ func worker(thread int, jobs <-chan *FileEntry, outputPath string, closure chan<
 				isFail = true
 				Shuffle()
 			} else {
+				j.success = true
 				if isFail {
 					getRecover++
 				}
@@ -493,7 +504,7 @@ func handleFile(m *Mirror, hash string, size int, url, output string) error {
 		}
 		if int(fileStat.Size()) != size {
 			if *debug {
-				fmt.Println("  Mismatched size of file", output)
+				fmt.Println("  Mismatched size of file", output, int(fileStat.Size()), "!=", size)
 			}
 		} else {
 			file, err := os.Open(output)
@@ -546,17 +557,17 @@ func handleFile(m *Mirror, hash string, size int, url, output string) error {
 		return fmt.Errorf("Unknown hash type for: %s", hash)
 	}
 
-	//resp, err := m.Client.Get(url)
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		log.Println("Error in HTTP making new request", err)
 		return err
 	}
 
-	ctx, cancel := context.WithTimeout(req.Context(), 60*time.Second)
-	defer cancel()
+	req.Header.Set("User-Agent", "curl/7.29.0")
+	//ctx, cancel := context.WithTimeout(req.Context(), 120*time.Second)
+	//defer cancel()
 
-	req = req.WithContext(ctx)
+	//req = req.WithContext(ctx)
 
 	start := time.Now()
 	resp, err := m.Client.Do(req)
@@ -599,10 +610,14 @@ func handleFile(m *Mirror, hash string, size int, url, output string) error {
 	for readErr != io.EOF {
 		// read from webserver
 		readBytes, readErr = resp.Body.Read(buf)
-		m.Bytes += readBytes
-		tick := time.Now()
-		m.Time += tick.Sub(start)
-		start = tick
+
+		{ // Track download speed
+			m.Bytes += readBytes
+			tick := time.Now()
+			m.Time += tick.Sub(start)
+			start = tick
+		}
+
 		if fileSize+readBytes > size {
 			readBytes = size - fileSize
 			readErr = io.EOF
@@ -624,7 +639,6 @@ func handleFile(m *Mirror, hash string, size int, url, output string) error {
 		} else {
 			zeroCounter = 0
 		}
-		//log.Println("  Read in", readBytes)
 		if err != nil {
 			return err
 		}
