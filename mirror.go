@@ -137,7 +137,7 @@ func PopWithout(skip []int) *Mirror {
 			}
 		}
 		if use && useList[i].inUse {
-			log.Println("sending a wait for mirror", useList[i].ID)
+			/*log.Println("sending a wait for mirror", useList[i].ID)
 			useList[i].c_n++
 			MirrorListSync.Unlock()
 			useList[i].c <- struct{}{}
@@ -145,6 +145,7 @@ func PopWithout(skip []int) *Mirror {
 			useList[i].c_n--
 			log.Println("mirror released", useList[i].ID)
 			return &useList[i]
+			*/
 		}
 	}
 
