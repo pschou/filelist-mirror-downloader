@@ -171,10 +171,10 @@ func main() {
 		var wg sync.WaitGroup
 
 		// Test speeds
-		for i, mm := range mirrors {
+		for ii, mm := range mirrors {
 			wg.Add(1)
 
-			go func(m string) {
+			go func(i int, m string) {
 				defer wg.Done()
 				if *debug {
 					fmt.Println("Starting test on", m)
@@ -206,7 +206,7 @@ func main() {
 						},
 					})
 				}
-			}(mm)
+			}(ii, mm)
 			time.Sleep(70 * time.Millisecond)
 		}
 		wg.Wait()
