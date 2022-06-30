@@ -206,6 +206,7 @@ func main() {
 							Timeout:   *connTimeout,
 							Transport: netTransport,
 						},
+						c: make(chan struct{}),
 					})
 					useListMutex.Unlock()
 				}

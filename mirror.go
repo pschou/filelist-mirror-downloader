@@ -23,7 +23,7 @@ type Mirror struct {
 	Bytes    int
 	Time     time.Duration
 	inUse    bool
-	//mirrors  *MirrorList
+	c        chan struct{}
 }
 
 func readMirrors(mirrorFile string) []string {
@@ -89,6 +89,10 @@ func ClearUse(id int) {
 	//m.inUse = false
 	for i := range useList {
 		if useList[i].ID == id {
+			if _, ok := <-useList[i].c; ok {
+				// If we have a file waiting for this mirror
+				return
+			}
 			useList[i].inUse = false
 			return
 		}
@@ -115,5 +119,22 @@ func PopWithout(skip []int) *Mirror {
 			return &useList[i]
 		}
 	}
+
+	for i := range useList {
+		use := true
+		for id := range skip {
+			if id == useList[i].ID {
+				use = false
+				break
+			}
+		}
+		if use {
+			MirrorListSync.Unlock()
+			useList[i].c <- struct{}{}
+			MirrorListSync.Lock()
+			return &useList[i]
+		}
+	}
+
 	return nil
 }
