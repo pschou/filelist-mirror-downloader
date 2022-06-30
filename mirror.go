@@ -89,10 +89,10 @@ func ClearUse(id int) {
 	//m.inUse = false
 	for i := range useList {
 		if useList[i].ID == id {
-			if _, ok := <-useList[i].c; ok {
-				// If we have a file waiting for this mirror
-				return
-			}
+			//if _, ok := <-useList[i].c; ok {
+			// If we have a file waiting for this mirror
+			//	return
+			//}
 			useList[i].inUse = false
 			return
 		}
@@ -130,9 +130,12 @@ func PopWithout(skip []int) *Mirror {
 		}
 		if use {
 			MirrorListSync.Unlock()
-			useList[i].c <- struct{}{}
+			if *debug {
+				log.Println("sending a wait for mirror", i)
+			}
+			//useList[i].c <- struct{}{}
 			MirrorListSync.Lock()
-			return &useList[i]
+			//return &useList[i]
 		}
 	}
 
