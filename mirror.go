@@ -24,6 +24,7 @@ type Mirror struct {
 	Time     time.Duration
 	inUse    bool
 	c        chan struct{}
+	c_n      int
 }
 
 func readMirrors(mirrorFile string) []string {
@@ -89,10 +90,12 @@ func ClearUse(id int) {
 	//m.inUse = false
 	for i := range useList {
 		if useList[i].ID == id {
-			//if _, ok := <-useList[i].c; ok {
-			// If we have a file waiting for this mirror
-			//	return
-			//}
+			if useList[i].c_n > 0 {
+				log.Println("found a wait", id)
+				// If we have a file waiting for this mirror
+				<-useList[i].c
+				return
+			}
 			useList[i].inUse = false
 			return
 		}
@@ -102,13 +105,15 @@ func ClearUse(id int) {
 func PopWithout(skip []int) *Mirror {
 	MirrorListSync.Lock()
 	defer MirrorListSync.Unlock()
-	//fmt.Println("mirror list: %+v\n", m)
+	//if len(skip) > 0 {
+	//	fmt.Printf("mirror without list: %+v\n", skip)
+	//}
 	for i := range useList {
 		if useList[i].inUse {
 			continue
 		}
 		use := true
-		for id := range skip {
+		for _, id := range skip {
 			if id == useList[i].ID {
 				use = false
 				break
@@ -116,26 +121,30 @@ func PopWithout(skip []int) *Mirror {
 		}
 		if use {
 			useList[i].inUse = true
+			//if len(skip) > 0 {
+			//	fmt.Printf("returning: %+v\n", useList[i])
+			//}
 			return &useList[i]
 		}
 	}
 
 	for i := range useList {
 		use := true
-		for id := range skip {
+		for _, id := range skip {
 			if id == useList[i].ID {
 				use = false
 				break
 			}
 		}
 		if use {
+			//log.Println("sending a wait for mirror", useList[i].ID)
+			useList[i].c_n++
 			MirrorListSync.Unlock()
-			if *debug {
-				log.Println("sending a wait for mirror", i)
-			}
-			//useList[i].c <- struct{}{}
+			useList[i].c <- struct{}{}
 			MirrorListSync.Lock()
-			//return &useList[i]
+			useList[i].c_n--
+			//log.Println("mirror released", useList[i].ID)
+			return &useList[i]
 		}
 	}
 

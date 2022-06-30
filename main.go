@@ -140,7 +140,7 @@ func main() {
 					case 'm':
 						useList.Print()
 					case 's':
-						total := getDisk + getMirror + getRecover
+						total := getDisk + getMirror //+ getRecover
 						percent := ""
 						if uniqueCount > 0 {
 							percent = fmt.Sprintf("%4.2f%%", 100.0*float32(total)/float32(uniqueCount))
@@ -385,7 +385,7 @@ func main() {
 
 	if !*testOnly {
 		useList.Print()
-		total := getDisk + getMirror + getRecover
+		total := getDisk + getMirror //+ getRecover
 		fmt.Println("Stat:  OnDisk:", getDisk, "Downloaded:", getMirror, "Fails:",
 			getFails, "Skipped:", getSkip, "Recovered:", getRecover, "Progress:", total, "/", uniqueCount)
 		if returnInt == 0 {
