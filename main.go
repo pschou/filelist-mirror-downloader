@@ -516,6 +516,9 @@ func handleFile(m *Mirror, hash string, size int, url, output string) error {
 				fmt.Println("  Found file:", output)
 			}
 			hashInterface := getHash(hash)
+			if hashInterface == nil {
+				log.Fatal("Unknown hash type:", hash)
+			}
 			io.Copy(hashInterface, file)
 			file.Close()
 
@@ -678,6 +681,7 @@ func handleFile(m *Mirror, hash string, size int, url, output string) error {
 }
 
 func getHash(hash string) hash.Hash {
+	hash = strings.ToLower(hash)
 	switch {
 	case strings.HasPrefix(hash, "{sha1}"):
 		return sha1.New()
@@ -699,7 +703,8 @@ func getHash(hash string) hash.Hash {
 	return nil
 }
 
-func checkHash(hash string, h hash.Hash) error {
+func checkHash(orig_hash string, h hash.Hash) error {
+	hash := strings.ToLower(orig_hash)
 	switch {
 	case strings.HasPrefix(hash, "{sha1}"):
 		if strings.EqualFold(strings.TrimPrefix(hash, "{sha1}"), fmt.Sprintf("%x", h.Sum(nil))) {
@@ -723,7 +728,7 @@ func checkHash(hash string, h hash.Hash) error {
 		}
 	case strings.HasPrefix(hash, "{alpine}"):
 		//fmt.Println("fn hash check", strings.TrimPrefix(hash, "{alpine}"), fmt.Sprintf("%s", h.Sum(nil)))
-		if strings.TrimPrefix(hash, "{alpine}") == fmt.Sprintf("%s", h.Sum(nil)) {
+		if orig_hash[len("{alpine}"):] == fmt.Sprintf("%s", h.Sum(nil)) {
 			return nil
 		}
 	}
