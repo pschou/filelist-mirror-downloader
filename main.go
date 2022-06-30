@@ -171,10 +171,10 @@ func main() {
 		var wg sync.WaitGroup
 
 		// Test speeds
-		for i, m := range mirrors {
+		for i, mm := range mirrors {
 			wg.Add(1)
 
-			go func() {
+			go func(m string) {
 				defer wg.Done()
 				if *debug {
 					fmt.Println("Starting test on", m)
@@ -206,7 +206,7 @@ func main() {
 						},
 					})
 				}
-			}()
+			}(mm)
 			time.Sleep(70 * time.Millisecond)
 		}
 		wg.Wait()
@@ -517,7 +517,7 @@ func handleFile(m *Mirror, hash string, size int, url, output string) error {
 			}
 			hashInterface := getHash(hash)
 			if hashInterface == nil {
-				log.Fatal("Unknown hash type:", hash)
+				return fmt.Errorf("Unknown hash type: %q", hash)
 			}
 			io.Copy(hashInterface, file)
 			file.Close()
