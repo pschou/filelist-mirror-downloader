@@ -52,6 +52,7 @@ var duplicates *string
 var after, before *time.Time
 var logFile *os.File
 
+var useListMutex sync.Mutex
 var useList MirrorList // List of mirrors to use
 
 type FileEntry struct {
@@ -196,6 +197,7 @@ func main() {
 						TLSHandshakeTimeout: 30 * time.Second,
 					}
 
+					useListMutex.Lock()
 					useList = append(useList, Mirror{
 						ID:      i + 1,
 						URL:     m,
@@ -205,6 +207,7 @@ func main() {
 							Transport: netTransport,
 						},
 					})
+					useListMutex.Unlock()
 				}
 			}(ii, mm)
 			time.Sleep(70 * time.Millisecond)
