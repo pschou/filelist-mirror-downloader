@@ -41,26 +41,31 @@ import (
 )
 
 var version = "test"
-var debug, testOnly *bool
+var debug *bool
+
+//var debug, testOnly *bool
 var attempts, shuffleAfter *int
 var returnInt int
-var getDisk, getMirror, getFails, getRecover, getSkip int
+var getDisk, getDownloaded, getFails, getRecover, getSkip int
 var startTime = time.Now()
 var uniqueCount, totalCount int
 var totalBytes uint64
 var duplicates *string
 var after, before *time.Time
 var logFile *os.File
+var outputPath *string
 
 var useListMutex sync.Mutex
 var useList MirrorList // List of mirrors to use
 
 type FileEntry struct {
-	hash    string
-	size    int
-	path    string
-	dups    []string
-	success bool
+	hash      string
+	size      int
+	path      string
+	dups      []string
+	attempted bool
+	success   bool
+	skip      []int
 }
 
 func main() {
@@ -72,7 +77,7 @@ func main() {
 
 	var background = flag.Bool("background", false, "Ignore all keyboard inputs, background mode")
 	var mirrorList = flag.String("mirrors", "mirrorlist.txt", "Mirror / directory list of prefixes to use")
-	var outputPath = flag.String("output", ".", "Path to put the repo files")
+	outputPath = flag.String("output", ".", "Path to put the repo files")
 	var logFilePath = flag.String("log", "", "File in which to store a log of files downloaded\n"+
 		"Line prefixes (OnDisk, OnDiskSkip, Skipped, Fetched), indicate action taken.\n"+
 		"Skip means that a file falls outside the required date bounds")
@@ -83,7 +88,7 @@ func main() {
 	shuffleAfter = flag.Int("shuffle", 100, "Shuffle the mirror list every N downloads")
 	var fileList = flag.String("list", "filelist.txt", "Filelist to be fetched (one per line with: HASH SIZE PATH)")
 	debug = flag.Bool("debug", false, "Turn on debug comments")
-	testOnly = flag.Bool("test", false, "Just validate downloaded files")
+	//testOnly = flag.Bool("test", false, "Just validate downloaded files")
 	duplicates = flag.String("dup", "symlink", "What to do with duplicates: omit, copy, symlink, hardlink")
 
 	var afterStr = flag.String("after", "", "Select packages after specified date\n"+
@@ -125,108 +130,107 @@ func main() {
 		return
 	}
 
-	if !*testOnly {
-		if !*background {
-			fmt.Println("Press  [m] mirror list  [s] stats  [w] worker")
-			go func() {
-				// disable input buffering
-				exec.Command("stty", "-F", "/dev/tty", "cbreak", "min", "1").Run()
-				// do not display entered characters on the screen
-				//exec.Command("stty", "-F", "/dev/tty", "-echo").Run()
-				var b []byte = make([]byte, 1)
-				for {
-					os.Stdin.Read(b)
-					switch b[0] {
-					case 'm':
-						useList.Print()
-					case 's':
-						total := getDisk + getMirror //+ getRecover
-						percent := ""
-						if uniqueCount > 0 {
-							percent = fmt.Sprintf("%4.2f%%", 100.0*float32(total)/float32(uniqueCount))
-						}
-						fmt.Println("Stat:  OnDisk:", getDisk, "Downloaded:", getMirror, "Fails:",
-							getFails, "Skipped:", getSkip, "Recovered:", getRecover, "Progress:", total, "/", uniqueCount, percent)
-					case 'w':
-						if len(worker_status) > 0 {
-							for i := 0; i < *threads; i++ {
-								fmt.Printf(" %d) %s\n", i+1, worker_status[i])
-							}
+	if !*background {
+		fmt.Println("Press  [m] mirror list  [s] stats  [w] worker")
+		go func() {
+			// disable input buffering
+			exec.Command("stty", "-F", "/dev/tty", "cbreak", "min", "1").Run()
+			// do not display entered characters on the screen
+			//exec.Command("stty", "-F", "/dev/tty", "-echo").Run()
+			var b []byte = make([]byte, 1)
+			for {
+				os.Stdin.Read(b)
+				switch b[0] {
+				case 'm':
+					useList.Print()
+				case 's':
+					total := getDisk + getDownloaded + getRecover
+					percent := ""
+					if uniqueCount > 0 {
+						percent = fmt.Sprintf("%4.2f%%", 100.0*float32(total)/float32(uniqueCount))
+					}
+					fmt.Println("Stat:  OnDisk:", getDisk, "Downloaded:", getDownloaded, "Fails:",
+						getFails, "Skipped:", getSkip, "Recovered:", getRecover, "Progress:", total, "/", uniqueCount, percent)
+				case 'w':
+					if len(worker_status) > 0 {
+						for i := 0; i < *threads; i++ {
+							fmt.Printf(" %d) %s\n", i+1, worker_status[i])
 						}
 					}
 				}
-			}()
-		}
+			}
+		}()
+	}
 
-		// Create the directory if needed
-		err := ensureDir(*outputPath)
-		if err != nil {
-			log.Fatal(err)
-		}
+	// Create the directory if needed
+	err := ensureDir(*outputPath)
+	if err != nil {
+		log.Fatal(err)
+	}
 
-		mirrors := readMirrors(*mirrorList)
-		var tmp string
+	mirrors := readMirrors(*mirrorList)
+	var tmp string
 
-		fmt.Println("Loaded", len(mirrors), "testing latencies and connectivity...")
+	fmt.Println("Loaded", len(mirrors), "testing latencies and connectivity...")
 
-		var wg sync.WaitGroup
+	var wg sync.WaitGroup
 
-		// Test speeds
-		for ii, mm := range mirrors {
-			wg.Add(1)
+	// Test speeds
+	for ii, mm := range mirrors {
+		wg.Add(1)
 
-			go func(i int, m string) {
-				defer wg.Done()
-				if *debug {
-					fmt.Println("Starting test on", m)
+		go func(i int, m string) {
+			defer wg.Done()
+			if *debug {
+				fmt.Println("Starting test on", m)
+			}
+			//repoPath := m + "/" + repoPath + "/"
+			//repomdPath := repoPath + "repodata/repomd.xml"
+			start := time.Now()
+			tmp = readFile(m)
+			delta := time.Now().Sub(start).Seconds() * 1000
+			if *debug {
+				fmt.Printf("%d) %.02f ms for %d bytes - %s\n", i, delta, len(tmp), m)
+			}
+			if delta < 4000 && len(tmp) > 100 {
+
+				var netTransport = &http.Transport{
+					Dial: (&net.Dialer{
+						Timeout: *connTimeout,
+					}).Dial,
+					TLSHandshakeTimeout: 30 * time.Second,
 				}
-				//repoPath := m + "/" + repoPath + "/"
-				//repomdPath := repoPath + "repodata/repomd.xml"
-				start := time.Now()
-				tmp = readFile(m)
-				delta := time.Now().Sub(start).Seconds() * 1000
-				if *debug {
-					fmt.Printf("%d) %.02f ms for %d bytes - %s\n", i, delta, len(tmp), m)
-				}
-				if delta < 4000 && len(tmp) > 100 {
 
-					var netTransport = &http.Transport{
-						Dial: (&net.Dialer{
-							Timeout: *connTimeout,
-						}).Dial,
-						TLSHandshakeTimeout: 30 * time.Second,
-					}
+				useListMutex.Lock()
+				useList = append(useList, Mirror{
+					ID:      i + 1,
+					URL:     m,
+					Latency: delta,
+					Client: http.Client{
+						Timeout:   *connTimeout,
+						Transport: netTransport,
+					},
+					c: make(chan struct{}),
+				})
+				useListMutex.Unlock()
+			}
+		}(ii, mm)
+		time.Sleep(70 * time.Millisecond)
+	}
+	wg.Wait()
+	fmt.Println("Downloading file list using", len(useList), "mirrors...")
 
-					useListMutex.Lock()
-					useList = append(useList, Mirror{
-						ID:      i + 1,
-						URL:     m,
-						Latency: delta,
-						Client: http.Client{
-							Timeout:   *connTimeout,
-							Transport: netTransport,
-						},
-						c: make(chan struct{}),
-					})
-					useListMutex.Unlock()
-				}
-			}(ii, mm)
-			time.Sleep(70 * time.Millisecond)
-		}
-		wg.Wait()
-		fmt.Println("Downloading file list using", len(useList), "mirrors...")
-
-		if len(useList) == 0 {
-			log.Fatal("No mirrors found")
-		}
+	if len(useList) == 0 {
+		log.Fatal("No mirrors found")
 	}
 
 	// Setup a worker group to do work!
 	jobs := make(chan *FileEntry, *threads)
-	closure := make(chan int, *threads)
 	worker_status = make([]string, *threads)
+
 	for w := 0; w < *threads; w++ {
-		go worker(w, jobs, *outputPath, closure)
+		wg.Add(1)
+		go worker(w, jobs, &wg)
 	}
 
 	file, err := os.Open(*fileList)
@@ -308,9 +312,8 @@ func main() {
 	}
 
 	close(jobs)
-	for w := 1; w <= *threads; w++ {
-		<-closure // ensure all the threads are closed
-	}
+	fmt.Print("Waiting for threads to close")
+	wg.Wait()
 
 	// Now that we have all the needed downloads, make all the links / copies
 	for _, j := range fileEntries {
@@ -383,18 +386,12 @@ func main() {
 		}
 	}
 
-	if !*testOnly {
-		useList.Print()
-		total := getDisk + getMirror //+ getRecover
-		fmt.Println("Stat:  OnDisk:", getDisk, "Downloaded:", getMirror, "Fails:",
-			getFails, "Skipped:", getSkip, "Recovered:", getRecover, "Progress:", total, "/", uniqueCount)
-		if returnInt == 0 {
-			fmt.Println("Successfully downloaded into", *outputPath)
-		}
-	} else {
-		if returnInt == 0 {
-			fmt.Println("# Successfully checked all files", *outputPath)
-		}
+	useList.Print()
+	total := getDisk + getDownloaded + getRecover
+	fmt.Println("Stat:  OnDisk:", getDisk, "Downloaded:", getDownloaded, "Fails:",
+		getFails, "Skipped:", getSkip, "Recovered:", getRecover, "Progress:", total, "/", uniqueCount)
+	if returnInt == 0 {
+		fmt.Println("Successfully downloaded into", *outputPath)
 	}
 	os.Exit(returnInt)
 }
@@ -406,74 +403,72 @@ var worker_status []string
 // the threads whenever one opens up to grab the next job.  Once the jobs
 // channel closes, the closure channel is used to make sure the threads are
 // fully completed before continuing in the main function.
-func worker(thread int, jobs <-chan *FileEntry, outputPath string, closure chan<- int) {
-	for j := range jobs {
-		//fmt.Printf("j = %+v\n", j)
-		output := path.Join(outputPath, j.path)
-		if *testOnly {
-			err := handleFile(nil, j.hash, j.size, "", output)
-			//fmt.Println("test", output)
-			if err != nil {
-				if *debug {
-					fmt.Printf("%s %d %s %s\n", j.hash, j.size, j.path, err)
-				}
-				returnInt = 1
+func worker(thread int, jobs <-chan *FileEntry, wg *sync.WaitGroup) {
+	defer func() {
+		if *debug {
+			fmt.Println("Closing thread", thread)
+		}
+		worker_status[thread] = "closed"
+		wg.Done()
+	}()
+	worker_status[thread] = "init"
+	for next_job := range jobs {
+		worker_status[thread] = fmt.Sprintf("finding mirror for %s", next_job.path)
+
+		m, any_left := GetMirrorOrQueue(next_job)
+		if !any_left {
+			fmt.Println("Failed: ", next_job.path)
+			getFails++
+		}
+		if m != nil {
+			for _, j := range append(GetQueue(m.ID), next_job) {
+				process(thread, m, j)
 			}
-			break
+			ClearUse(m.ID)
 		}
 
-		skip := []int{}
-		isFail := false
-		var url string
-		var m *Mirror
-		for len(skip) < *attempts && len(skip) < len(useList) {
-			for m = PopWithout(skip); m == nil; m = PopWithout(skip) {
-				if *debug {
-					fmt.Println("  Waiting for a mirror to become available")
-				}
-				time.Sleep(3 * time.Second)
-			}
-			url = m.URL + "/" + strings.TrimPrefix(j.path, "/")
-			worker_status[thread] = fmt.Sprintf("%d ~~ %s", m.ID, output)
-			if *debug {
-				fmt.Println("Downloading file", url, "to", output)
-			}
-
-			err := handleFile(m, j.hash, j.size, url, output)
-			if err != nil && *debug {
-				fmt.Printf("%s %d %s %s\n", j.hash, j.size, j.path, err)
-			}
-			worker_status[thread] = "waiting"
-
-			ClearUse(m.ID)
-			if err != nil {
-				skip = append(skip, m.ID)
-				//fmt.Println("  Error:", err, "on", url, "using mirror id", m.ID)
-				//fmt.Printf("  skip list: %+v\n", skip)
-				//useList.Print()
-				m.Failures++
-				if !isFail {
-					getFails++
-				}
-				isFail = true
-				Shuffle()
-			} else {
-				j.success = true
-				if isFail {
-					getRecover++
-				}
-				if *debug {
-					fmt.Println("  Success on", url)
-				}
+		for {
+			jobs, m := FindStragglers()
+			if m == nil {
 				break
 			}
+			for _, j := range jobs {
+				process(thread, m, j)
+			}
+			ClearUse(m.ID)
 		}
-		if len(skip) == *attempts {
-			fmt.Println("  Exhausted the retries", j.path, skip)
-			returnInt = 1
+
+		worker_status[thread] = "waiting"
+	}
+}
+
+func process(thread int, m *Mirror, j *FileEntry) {
+	attempted := j.attempted
+	j.attempted = true
+	output := path.Join(*outputPath, j.path)
+	url := m.URL + "/" + strings.TrimPrefix(j.path, "/")
+	worker_status[thread] = fmt.Sprintf("%d ~~ %s", m.ID, output)
+	if *debug {
+		fmt.Println("Downloading file", url, "to", output)
+	}
+
+	err := handleFile(m, j.hash, j.size, url, output)
+	if err != nil && *debug {
+		fmt.Printf("%s %d %s %s\n", j.hash, j.size, j.path, err)
+	}
+	if err == nil {
+		j.success = true
+		if attempted {
+			getRecover++
+		}
+	} else {
+		j.skip = append(j.skip, m.ID)
+		if !Queue(j) {
+			getFails++
+		} else if *debug {
+			fmt.Println("requeued %s\n", j.path)
 		}
 	}
-	closure <- 1
 }
 
 // The bulk of the work is done in this function, from testing the file on disk
@@ -498,9 +493,9 @@ func handleFile(m *Mirror, hash string, size int, url, output string) error {
 	fileStat, err := os.Stat(output)
 
 	// If we are in test mode, return if a file is missing
-	if *testOnly && err != nil {
+	/*if *testOnly && err != nil {
 		return err
-	}
+	}*/
 
 	if err == nil {
 		if fileStat.IsDir() {
@@ -551,9 +546,9 @@ func handleFile(m *Mirror, hash string, size int, url, output string) error {
 				}
 			}
 		}
-		if *testOnly {
+		/*if *testOnly {
 			return fmt.Errorf("Invalid file")
-		}
+		}*/
 		if url == "" {
 			return fmt.Errorf("url empty")
 		}
@@ -671,7 +666,7 @@ func handleFile(m *Mirror, hash string, size int, url, output string) error {
 	// Check the hash and return any errors
 	err = checkHash(hash, hashInterface)
 	if err == nil {
-		getMirror++
+		getDownloaded++
 		if logFile != nil {
 			fmt.Fprintln(logFile, "Fetched:", output)
 		}
@@ -681,7 +676,7 @@ func handleFile(m *Mirror, hash string, size int, url, output string) error {
 			os.Chtimes(output, fileTime, fileTime)
 		}
 	}
-	return nil
+	return err
 }
 
 func getHash(hash string) hash.Hash {

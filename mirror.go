@@ -23,6 +23,7 @@ type Mirror struct {
 	Bytes    int
 	Time     time.Duration
 	inUse    bool
+	queue    []*FileEntry
 	c        chan struct{}
 	c_n      int
 }
@@ -102,53 +103,91 @@ func ClearUse(id int) {
 	}
 	log.Fatal("Could not find mirror ID", id)
 }
-func PopWithout(skip []int) *Mirror {
+
+func GetMirrorOrQueue(f *FileEntry) (*Mirror, bool) {
 	MirrorListSync.Lock()
 	defer MirrorListSync.Unlock()
 	//if len(skip) > 0 {
 	//	fmt.Printf("mirror without list: %+v\n", skip)
 	//}
+	backup := -1
 	for i := range useList {
-		if useList[i].inUse {
-			continue
-		}
 		use := true
-		for _, id := range skip {
+		for _, id := range f.skip {
 			if id == useList[i].ID {
 				use = false
 				break
 			}
 		}
 		if use {
+			backup = i
+		}
+		if useList[i].inUse {
+			continue
+		}
+		if use {
 			useList[i].inUse = true
-			//if len(skip) > 0 {
-			//	fmt.Printf("returning: %+v\n", useList[i])
-			//}
-			return &useList[i]
+			return &useList[i], true
 		}
 	}
 
+	if backup > -1 {
+		useList[backup].queue = append(useList[backup].queue, f)
+		return nil, true
+	}
+
+	return nil, false
+}
+
+func Queue(f *FileEntry) bool {
+	MirrorListSync.Lock()
+	defer MirrorListSync.Unlock()
+	//if len(skip) > 0 {
+	//	fmt.Printf("mirror without list: %+v\n", skip)
+	//}
 	for i := range useList {
 		use := true
-		for _, id := range skip {
+		for _, id := range f.skip {
 			if id == useList[i].ID {
 				use = false
 				break
 			}
 		}
-		if use && useList[i].inUse {
-			/*
-				log.Println("sending a wait for mirror", useList[i].ID)
-				useList[i].c_n++
-				MirrorListSync.Unlock()
-				useList[i].c <- struct{}{}
-				MirrorListSync.Lock()
-				useList[i].c_n--
-				log.Println("mirror released", useList[i].ID)
-				return &useList[i]
-			*/
+		if use {
+			useList[i].queue = append(useList[i].queue, f)
+			return true
 		}
 	}
 
-	return nil
+	return false
+}
+
+func FindStragglers() ([]*FileEntry, *Mirror) {
+	MirrorListSync.Lock()
+	defer MirrorListSync.Unlock()
+	for i := range useList {
+		if useList[i].inUse {
+			continue
+		}
+		if len(useList[i].queue) > 0 {
+			ret := useList[i].queue
+			useList[i].queue = []*FileEntry{}
+			useList[i].inUse = true
+			return ret, &useList[i]
+		}
+	}
+	return nil, nil
+}
+
+func GetQueue(id int) []*FileEntry {
+	MirrorListSync.Lock()
+	defer MirrorListSync.Unlock()
+	for i := range useList {
+		if id == useList[i].ID {
+			ret := useList[i].queue
+			useList[i].queue = []*FileEntry{}
+			return ret
+		}
+	}
+	return []*FileEntry{}
 }
