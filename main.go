@@ -144,7 +144,7 @@ func main() {
 				case 'm':
 					useList.Print()
 				case 's':
-					total := getDisk + getDownloaded + getRecover
+					total := getDisk + getDownloaded
 					percent := ""
 					if uniqueCount > 0 {
 						percent = fmt.Sprintf("%4.2f%%", 100.0*float32(total)/float32(uniqueCount))
@@ -312,7 +312,9 @@ func main() {
 	}
 
 	close(jobs)
-	fmt.Print("Waiting for threads to close")
+	if *debug {
+		fmt.Print("Waiting for threads to close")
+	}
 	wg.Wait()
 
 	// Now that we have all the needed downloads, make all the links / copies
@@ -387,7 +389,7 @@ func main() {
 	}
 
 	useList.Print()
-	total := getDisk + getDownloaded + getRecover
+	total := getDisk + getDownloaded
 	fmt.Println("Stat:  OnDisk:", getDisk, "Downloaded:", getDownloaded, "Fails:",
 		getFails, "Skipped:", getSkip, "Recovered:", getRecover, "Progress:", total, "/", uniqueCount)
 	if returnInt == 0 {
