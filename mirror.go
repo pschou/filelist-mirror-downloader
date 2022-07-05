@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
+	"net"
 	"net/http"
 	"os"
 	"sort"
@@ -16,6 +17,7 @@ import (
 type Mirror struct {
 	ID       int
 	URL      string
+	IP       net.IP
 	Latency  float64
 	Random   float64
 	Failures int

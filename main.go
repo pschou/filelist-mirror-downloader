@@ -46,7 +46,7 @@ var debug *bool
 //var debug, testOnly *bool
 var attempts, shuffleAfter *int
 var returnInt int
-var getDisk, getDownloaded, getFails, getRecover, getSkip int
+var getDisk, getDownloaded, getUncomp, getFails, getRecover, getSkip int
 var startTime = time.Now()
 var uniqueCount, totalCount int
 var totalBytes uint64
@@ -59,13 +59,17 @@ var useListMutex sync.Mutex
 var useList MirrorList // List of mirrors to use
 
 type FileEntry struct {
-	hash      string
-	size      int
-	path      string
-	dups      []string
-	attempted bool
-	success   bool
-	skip      []int
+	hash                string
+	size                int
+	path                string
+	ext                 string
+	compressedVersion   []*FileEntry
+	uncompressedVersion []*FileEntry
+	modified            time.Time
+	dups                []string
+	attempted           bool
+	success             bool
+	skip                []int
 }
 
 func main() {
@@ -79,7 +83,7 @@ func main() {
 	var mirrorList = flag.String("mirrors", "mirrorlist.txt", "Mirror / directory list of prefixes to use")
 	outputPath = flag.String("output", ".", "Path to put the repo files")
 	var logFilePath = flag.String("log", "", "File in which to store a log of files downloaded\n"+
-		"Line prefixes (OnDisk, OnDiskSkip, Skipped, Fetched), indicate action taken.\n"+
+		"Line prefixes (OnDisk, OnDiskSkip, Skipped, Fetched, Uncompressed, Failed), indicate action taken.\n"+
 		"Skip means that a file falls outside the required date bounds")
 	var threads = flag.Int("threads", 4, "Concurrent downloads")
 	attempts = flag.Int("attempts", 40, "Attempts for each file")
@@ -144,12 +148,12 @@ func main() {
 				case 'm':
 					useList.Print()
 				case 's':
-					total := getDisk + getDownloaded
+					total := getDisk + getDownloaded + getUncomp
 					percent := ""
 					if uniqueCount > 0 {
 						percent = fmt.Sprintf("%4.2f%%", 100.0*float32(total)/float32(uniqueCount))
 					}
-					fmt.Println("Stat:  OnDisk:", getDisk, "Downloaded:", getDownloaded, "Fails:",
+					fmt.Println("Stat:  OnDisk:", getDisk, "Downloaded:", getDownloaded, "Uncompressed:", getUncomp, "Fails:",
 						getFails, "Skipped:", getSkip, "Recovered:", getRecover, "Progress:", total, "/", uniqueCount, percent)
 				case 'w':
 					if len(worker_status) > 0 {
@@ -244,6 +248,8 @@ func main() {
 
 	fileEntries := []*FileEntry{}
 	fileMap := make(map[string]*FileEntry)
+	compressed := []*FileEntry{}
+	uncompressed := make(map[string]*FileEntry)
 	for scanner.Scan() {
 		line := scanner.Text()
 		// Split line by line of filelist
@@ -256,14 +262,16 @@ func main() {
 				continue
 			}
 
-			entry := FileEntry{}
+			entry := FileEntry{
+				hash: parts[0],
+				path: strings.TrimSpace(parts[2]),
+				ext:  filepath.Ext(strings.TrimSpace(parts[2])),
+			}
 			entry.size, err = strconv.Atoi(parts[1])
 			if err != nil {
 				fmt.Println("invalid file size", parts[1], "for", parts[2])
 				continue
 			}
-			entry.hash = parts[0]
-			entry.path = strings.TrimSpace(parts[2])
 			mapstr := parts[1] + " " + parts[0]
 			if e, ok := fileMap[mapstr]; ok {
 				if e.path == entry.path {
@@ -284,7 +292,16 @@ func main() {
 					}
 				}
 			} else {
-				// New entry, not already seen
+				// New entry, not already matched
+
+				switch entry.ext {
+				case ".gz":
+					// add to compressed file list if compressed file extension
+					compressed = append(compressed, &entry)
+				default:
+					uncompressed[entry.path] = &entry
+				}
+
 				uniqueCount++
 				totalBytes += uint64(entry.size)
 				fileMap[mapstr] = &entry
@@ -293,8 +310,28 @@ func main() {
 			totalCount++
 		}
 	}
+
+	// Loop over compressed files and add compressed to uncompressed
+	for _, entry := range compressed {
+		for _, entry_path := range append(entry.dups, entry.path) {
+			if len(entry_path) > len(entry.ext) {
+				uc_name := entry_path[:len(entry_path)-len(entry.ext)]
+				if uc_entry, ok := uncompressed[uc_name]; ok {
+					// Found compressed version of file
+					uc_entry.compressedVersion = append(uc_entry.compressedVersion, entry)
+					entry.uncompressedVersion = append(entry.uncompressedVersion, uc_entry)
+				}
+			}
+		}
+	}
+
 	fmt.Println("# Files list stats -- Total:", totalCount, "Unique:", uniqueCount, "Size:", humanize.Bytes(totalBytes))
 	for i, entry := range fileEntries {
+		if len(entry.compressedVersion) > 0 {
+			// Skip downloading entries with available compressed version of file to reduce network transfers, the compressed version
+			// should be tried first.
+			continue
+		}
 		if i%(*shuffleAfter) == 0 {
 			// Sort the mirror list by weight, latency + failures + random
 			Shuffle()
@@ -389,8 +426,8 @@ func main() {
 	}
 
 	useList.Print()
-	total := getDisk + getDownloaded
-	fmt.Println("Stat:  OnDisk:", getDisk, "Downloaded:", getDownloaded, "Fails:",
+	total := getDisk + getDownloaded + getUncomp
+	fmt.Println("Stat:  OnDisk:", getDisk, "Downloaded:", getDownloaded, "Uncompressed:", getUncomp, "Fails:",
 		getFails, "Skipped:", getSkip, "Recovered:", getRecover, "Progress:", total, "/", uniqueCount)
 	if returnInt == 0 {
 		fmt.Println("Successfully downloaded into", *outputPath)
@@ -454,7 +491,7 @@ func process(thread int, m *Mirror, j *FileEntry) {
 		fmt.Println("Downloading file", url, "to", output)
 	}
 
-	err := handleFile(m, j.hash, j.size, url, output)
+	err := handleFile(m, j)
 	if err != nil && *debug {
 		fmt.Printf("%s %d %s %s\n", j.hash, j.size, j.path, err)
 	}
@@ -463,9 +500,47 @@ func process(thread int, m *Mirror, j *FileEntry) {
 		if attempted {
 			getRecover++
 		}
+
+		for _, uj := range j.uncompressedVersion {
+			switch j.ext {
+			case ".gz":
+				hashInterface := getHash(uj.hash)
+				if hashInterface == nil {
+					log.Println("Unknown hash interface:", uj.hash)
+					continue
+				}
+				uj_output := path.Join(*outputPath, uj.path)
+				_, err = copyUncompFile(output, uj_output, j.ext, hashInterface)
+				if err != nil {
+					log.Println("Error in uncompress:", err)
+					os.Remove(uj_output)
+					Queue(uj)
+					continue
+				}
+
+				// Check the hash and return any errors
+				err = checkHash(uj.hash, hashInterface)
+				if err == nil {
+					getUncomp++
+					fmt.Fprintln(logFile, "Uncompressed:", uj_output)
+					uj.success = true
+					if &j.modified != nil {
+						os.Chtimes(uj_output, j.modified, j.modified)
+					}
+				} else {
+					log.Println("Error in uncompress hash check:", err)
+					os.Remove(uj_output)
+					Queue(uj)
+				}
+			default:
+				log.Println("Unsupported compression type", j.ext)
+			}
+		}
 	} else {
 		j.skip = append(j.skip, m.ID)
-		if !Queue(j) {
+		hasQueued := Queue(j)
+		if !hasQueued {
+			// Could not re-queue, count as a fail
 			getFails++
 		} else if *debug {
 			fmt.Println("requeued %s\n", j.path)
@@ -475,7 +550,9 @@ func process(thread int, m *Mirror, j *FileEntry) {
 
 // The bulk of the work is done in this function, from testing the file on disk
 // to see if it is valid, to downloading the file from a given mirror.
-func handleFile(m *Mirror, hash string, size int, url, output string) error {
+func handleFile(m *Mirror, j *FileEntry) error {
+	output := path.Join(*outputPath, j.path)
+	url := m.URL + "/" + strings.TrimPrefix(j.path, "/")
 	success := false
 	defer func() {
 		if !success {
@@ -504,9 +581,9 @@ func handleFile(m *Mirror, hash string, size int, url, output string) error {
 			fmt.Println("  File is directory", output)
 			return fmt.Errorf("File is directory")
 		}
-		if int(fileStat.Size()) != size {
+		if int(fileStat.Size()) != j.size {
 			if *debug {
-				fmt.Println("  Mismatched size of file", output, int(fileStat.Size()), "!=", size)
+				fmt.Println("  Mismatched size of file", output, int(fileStat.Size()), "!=", j.size)
 			}
 		} else {
 			file, err := os.Open(output)
@@ -516,15 +593,15 @@ func handleFile(m *Mirror, hash string, size int, url, output string) error {
 			if *debug {
 				fmt.Println("  Found file:", output)
 			}
-			hashInterface := getHash(hash)
+			hashInterface := getHash(j.hash)
 			if hashInterface == nil {
-				return fmt.Errorf("Unknown hash type: %q", hash)
+				return fmt.Errorf("Unknown hash type: %q", j.hash)
 			}
 			io.Copy(hashInterface, file)
 			file.Close()
 
 			// Check the hash and return any errors
-			err = checkHash(hash, hashInterface)
+			err = checkHash(j.hash, hashInterface)
 			if err == nil {
 				if *debug {
 					fmt.Println("  Skipping, found valid file:", output)
@@ -544,7 +621,7 @@ func handleFile(m *Mirror, hash string, size int, url, output string) error {
 				return nil
 			} else {
 				if *debug {
-					fmt.Println("hash check failed", output, "hash:", hash, "err:", err)
+					fmt.Println("hash check failed", output, "hash:", j.hash, "err:", err)
 				}
 			}
 		}
@@ -557,9 +634,9 @@ func handleFile(m *Mirror, hash string, size int, url, output string) error {
 		os.Remove(output)
 	}
 
-	hashInterface := getHash(hash)
+	hashInterface := getHash(j.hash)
 	if hashInterface == nil {
-		return fmt.Errorf("Unknown hash type for: %s", hash)
+		return fmt.Errorf("Unknown hash type for: %s", j.hash)
 	}
 
 	req, err := http.NewRequest("GET", url, nil)
@@ -584,6 +661,9 @@ func handleFile(m *Mirror, hash string, size int, url, output string) error {
 	defer resp.Body.Close()
 
 	fileTime, fileTimeErr := http.ParseTime(resp.Header.Get("Last-Modified"))
+	if fileTimeErr == nil {
+		j.modified = fileTime
+	}
 	if after != nil && fileTime.Before(*after) {
 		if logFile != nil {
 			fmt.Fprintln(logFile, "Skipped:", output)
@@ -623,8 +703,8 @@ func handleFile(m *Mirror, hash string, size int, url, output string) error {
 			start = tick
 		}
 
-		if fileSize+readBytes > size {
-			readBytes = size - fileSize
+		if fileSize+readBytes > j.size {
+			readBytes = j.size - fileSize
 			readErr = io.EOF
 		}
 		fileSize += readBytes
@@ -660,13 +740,13 @@ func handleFile(m *Mirror, hash string, size int, url, output string) error {
 	}
 	file.Close()
 
-	if fileSize != size {
+	if fileSize != j.size {
 		os.Remove(output)
-		return fmt.Errorf("Size mismatch, %d != %s", fileSize, size)
+		return fmt.Errorf("Size mismatch, %d != %s", fileSize, j.size)
 	}
 
 	// Check the hash and return any errors
-	err = checkHash(hash, hashInterface)
+	err = checkHash(j.hash, hashInterface)
 	if err == nil {
 		getDownloaded++
 		if logFile != nil {

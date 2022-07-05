@@ -16,6 +16,7 @@ package main
 
 import (
 	"bytes"
+	"compress/gzip"
 	"errors"
 	"fmt"
 	"io"
@@ -160,5 +161,41 @@ func copyFile(src, dst string) (int64, error) {
 	}
 	defer destination.Close()
 	nBytes, err := io.Copy(destination, source)
+	return nBytes, err
+}
+
+func copyUncompFile(src, dst, ext string, hash io.Writer) (int64, error) {
+	sourceFileStat, err := os.Stat(src)
+	if err != nil {
+		return 0, err
+	}
+
+	if !sourceFileStat.Mode().IsRegular() {
+		return 0, fmt.Errorf("%s is not a regular file", src)
+	}
+
+	source, err := os.Open(src)
+	if err != nil {
+		return 0, err
+	}
+	defer source.Close()
+
+	var uncomp_src io.Reader
+	switch ext {
+	case ".gz":
+		gunzip, err := gzip.NewReader(source)
+		if err != nil {
+			return 0, err
+		}
+		defer gunzip.Close()
+		uncomp_src = gunzip
+	}
+
+	destination, err := os.Create(dst)
+	if err != nil {
+		return 0, err
+	}
+	defer destination.Close()
+	nBytes, err := io.Copy(io.MultiWriter(destination, hash), uncomp_src)
 	return nBytes, err
 }
