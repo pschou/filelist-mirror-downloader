@@ -26,6 +26,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/ulikunitz/xz"
 )
 
 var ensureDirMap = make(map[string]int8)
@@ -189,6 +191,12 @@ func copyUncompFile(src, dst, ext string, hash io.Writer) (int64, error) {
 		}
 		defer gunzip.Close()
 		uncomp_src = gunzip
+	case ".xz":
+		xz_unzip, err := xz.NewReader(source)
+		if err != nil {
+			return 0, err
+		}
+		uncomp_src = xz_unzip
 	}
 
 	destination, err := os.Create(dst)

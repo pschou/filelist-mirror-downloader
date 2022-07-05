@@ -295,7 +295,7 @@ func main() {
 				// New entry, not already matched
 
 				switch entry.ext {
-				case ".gz":
+				case ".gz", ".xz":
 					// add to compressed file list if compressed file extension
 					compressed = append(compressed, &entry)
 				default:
@@ -503,7 +503,7 @@ func process(thread int, m *Mirror, j *FileEntry) {
 
 		for _, uj := range j.uncompressedVersion {
 			switch j.ext {
-			case ".gz":
+			case ".gz", ".xz":
 				hashInterface := getHash(uj.hash)
 				if hashInterface == nil {
 					log.Println("Unknown hash interface:", uj.hash)
