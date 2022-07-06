@@ -259,6 +259,7 @@ func main() {
 		}
 	}
 	wg.Wait()
+	Shuffle()
 	fmt.Println("Downloading file list using", len(useList), "mirrors...")
 
 	if len(useList) == 0 {
