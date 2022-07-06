@@ -15,6 +15,7 @@ import (
 )
 
 type Mirror struct {
+	title    string
 	ID       int
 	URL      string
 	IP       net.IP
@@ -71,7 +72,8 @@ func (m MirrorList) Print() {
 	defer MirrorListSync.Unlock()
 	fmt.Println(" #  Weight Latency Fails   Rand InUse MBps URL")
 	for _, e := range m {
-		fmt.Printf("%2d) %6.02f %6.02f %6d %6.02f %t %5.1f %s\n", e.ID, e.Latency+float64(e.Failures)*20+e.Random, e.Latency, e.Failures, e.Random, e.inUse, float32(e.Bytes)/float32(e.Time)*1e3, e.URL)
+		fmt.Printf("%2d) %6.02f %6.02f %6d %6.02f %t %5.1f %s\n", e.ID, e.Latency+float64(e.Failures)*20+e.Random,
+			e.Latency, e.Failures, e.Random, e.inUse, float32(e.Bytes)/float32(e.Time)*1e3, e.title)
 	}
 }
 func Shuffle() {

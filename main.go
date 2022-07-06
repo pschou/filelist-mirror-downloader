@@ -27,6 +27,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path"
@@ -181,45 +182,80 @@ func main() {
 
 	// Test speeds
 	for ii, mm := range mirrors {
-		wg.Add(1)
+		mirror_url, err := url.Parse(mm)
+		if err != nil {
+			continue
+		}
+		if *debug {
+			fmt.Println("looking up ip for:", mirror_url.Host)
+		}
+		host, _, err := net.SplitHostPort(mirror_url.Host)
+		if err != nil {
+			host = mirror_url.Host
+		}
 
-		go func(i int, m string) {
-			defer wg.Done()
+		ips := getIPs(host)
+		for _, ip := range ips {
 			if *debug {
-				fmt.Println("Starting test on", m)
+				fmt.Println("  ip:", ip)
 			}
-			//repoPath := m + "/" + repoPath + "/"
-			//repomdPath := repoPath + "repodata/repomd.xml"
-			start := time.Now()
-			tmp = readFile(m)
-			delta := time.Now().Sub(start).Seconds() * 1000
-			if *debug {
-				fmt.Printf("%d) %.02f ms for %d bytes - %s\n", i, delta, len(tmp), m)
-			}
-			if delta < 4000 && len(tmp) > 100 {
 
-				var netTransport = &http.Transport{
-					Dial: (&net.Dialer{
-						Timeout: *connTimeout,
-					}).Dial,
-					TLSHandshakeTimeout: 30 * time.Second,
+			wg.Add(1)
+
+			go func(i int, m string, ip net.IP) {
+				defer wg.Done()
+				if *debug {
+					fmt.Println("Starting test on", m)
 				}
+				//repoPath := m + "/" + repoPath + "/"
+				//repomdPath := repoPath + "repodata/repomd.xml"
+				start := time.Now()
+				tmp = readFile(m)
+				delta := time.Now().Sub(start).Seconds() * 1000
+				if *debug {
+					fmt.Printf("%d) %.02f ms for %d bytes - %s\n", i, delta, len(tmp), m)
+				}
+				if delta < 4000 && len(tmp) > 100 {
 
-				useListMutex.Lock()
-				useList = append(useList, Mirror{
-					ID:      i + 1,
-					URL:     m,
-					Latency: delta,
-					Client: http.Client{
-						Timeout:   *connTimeout,
-						Transport: netTransport,
-					},
-					c: make(chan struct{}),
-				})
-				useListMutex.Unlock()
-			}
-		}(ii, mm)
-		time.Sleep(70 * time.Millisecond)
+					dial := func(network, address string) (net.Conn, error) {
+						_, port, err := net.SplitHostPort(address)
+						if err != nil {
+							return nil, err
+						}
+						return (&net.Dialer{
+							Timeout: *connTimeout,
+						}).Dial(network, net.JoinHostPort(ip.String(), port))
+					}
+
+					var netTransport = &http.Transport{
+						Dial:                dial,
+						TLSHandshakeTimeout: 30 * time.Second,
+					}
+
+					useListMutex.Lock()
+
+					title := m
+					if len(ips) > 1 {
+						title += " (" + ip.String() + ")"
+					}
+
+					useList = append(useList, Mirror{
+						ID:      i + 1,
+						title:   title,
+						URL:     m,
+						IP:      ip,
+						Latency: delta,
+						Client: http.Client{
+							Timeout:   *connTimeout,
+							Transport: netTransport,
+						},
+						c: make(chan struct{}),
+					})
+					useListMutex.Unlock()
+				}
+			}(ii, mm, ip)
+			time.Sleep(70 * time.Millisecond)
+		}
 	}
 	wg.Wait()
 	fmt.Println("Downloading file list using", len(useList), "mirrors...")
@@ -492,8 +528,11 @@ func process(thread int, m *Mirror, j *FileEntry) {
 	}
 
 	err := handleFile(m, j)
-	if err != nil && *debug {
-		fmt.Printf("%s %d %s %s\n", j.hash, j.size, j.path, err)
+	if err != nil {
+		m.Failures++
+		if *debug {
+			fmt.Printf("Failed file: %s %d %s %s\n", j.hash, j.size, j.path, err)
+		}
 	}
 	if err == nil {
 		j.success = true
