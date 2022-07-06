@@ -181,7 +181,8 @@ func main() {
 	var wg sync.WaitGroup
 
 	// Test speeds
-	for ii, mm := range mirrors {
+	id := 0
+	for _, mm := range mirrors {
 		mirror_url, err := url.Parse(mm)
 		if err != nil {
 			continue
@@ -202,7 +203,7 @@ func main() {
 
 			wg.Add(1)
 
-			go func(i int, m string, ip net.IP) {
+			go func(m string, ip net.IP) {
 				defer wg.Done()
 				if *debug {
 					fmt.Println("Starting test on", m)
@@ -213,7 +214,7 @@ func main() {
 				tmp = readFile(m)
 				delta := time.Now().Sub(start).Seconds() * 1000
 				if *debug {
-					fmt.Printf("%d) %.02f ms for %d bytes - %s\n", i, delta, len(tmp), m)
+					fmt.Printf("  %.02f ms for %d bytes - %s\n", delta, len(tmp), m)
 				}
 				if delta < 4000 && len(tmp) > 100 {
 
@@ -232,15 +233,15 @@ func main() {
 						TLSHandshakeTimeout: 30 * time.Second,
 					}
 
-					useListMutex.Lock()
-
 					title := m
 					if len(ips) > 1 {
 						title += " (" + ip.String() + ")"
 					}
 
+					useListMutex.Lock()
+					id++
 					useList = append(useList, Mirror{
-						ID:      i + 1,
+						ID:      id,
 						title:   title,
 						URL:     m,
 						IP:      ip,
@@ -253,7 +254,7 @@ func main() {
 					})
 					useListMutex.Unlock()
 				}
-			}(ii, mm, ip)
+			}(mm, ip)
 			time.Sleep(70 * time.Millisecond)
 		}
 	}

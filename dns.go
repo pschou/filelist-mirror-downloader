@@ -2,7 +2,6 @@ package main
 
 import (
 	"errors"
-	"fmt"
 	"log"
 	"net"
 	"os"
@@ -46,7 +45,7 @@ func getIPs(hostname string) (ips []net.IP) {
 					err = errors.New("A lookup error " + os.Args[2])
 				}
 			} else {
-				log.Fatal("Error querying DNS server for", hostname, err)
+				log.Println("Error querying DNS server for", hostname, err)
 			}
 
 			m.SetQuestion(strings.TrimSuffix(hostname, ".")+".", dns.TypeAAAA)
@@ -65,11 +64,10 @@ func getIPs(hostname string) (ips []net.IP) {
 					err = errors.New("A lookup error " + os.Args[2])
 				}
 			} else {
-				log.Fatal("Error querying DNS server for", hostname, err)
+				log.Println("Error querying DNS server for", hostname, err)
 			}
 		}
 		time.Sleep(70 * time.Millisecond)
 	}
-	fmt.Println("Returning ips", ips)
 	return ips
 }
