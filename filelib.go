@@ -25,7 +25,6 @@ import (
 	"os"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/ulikunitz/xz"
 )
@@ -81,7 +80,7 @@ func isSymlink(filepath string) bool {
 	// This is a symlink
 }
 
-func readFile(filePath string) string {
+func readFile(filePath string, client http.Client) string {
 	// Declare file handle for the reading
 	var file io.Reader
 
@@ -91,7 +90,7 @@ func readFile(filePath string) string {
 		// Open our xmlFile
 		rawFile, err := os.Open(filePath)
 		if err != nil {
-			log.Println("Error in HTTP get request", err)
+			//log.Println("Error in HTTP get request", err)
 			return ""
 		}
 
@@ -99,9 +98,6 @@ func readFile(filePath string) string {
 		defer rawFile.Close()
 		file = rawFile
 	} else if strings.HasPrefix(filePath, "http") {
-		var client = http.Client{
-			Timeout: 120 * time.Second,
-		}
 
 		req, err := http.NewRequest("GET", filePath, nil)
 		if err != nil {
@@ -112,7 +108,7 @@ func readFile(filePath string) string {
 		req.Header.Set("User-Agent", "curl/7.29.0")
 		resp, err := client.Do(req)
 		if err != nil {
-			log.Println("Error in HTTP get request", err)
+			//log.Println("Error in HTTP get request", err)
 			return ""
 		}
 

@@ -210,28 +210,36 @@ func main() {
 				}
 				//repoPath := m + "/" + repoPath + "/"
 				//repomdPath := repoPath + "repodata/repomd.xml"
+
+				dial := func(network, address string) (net.Conn, error) {
+					_, port, err := net.SplitHostPort(address)
+					if err != nil {
+						return nil, err
+					}
+					return (&net.Dialer{
+						Timeout: *connTimeout,
+					}).Dial(network, net.JoinHostPort(ip.String(), port))
+				}
+
+				var netTransport = &http.Transport{
+					Dial:                dial,
+					TLSHandshakeTimeout: 30 * time.Second,
+				}
+				client := http.Client{
+					Timeout:   *connTimeout,
+					Transport: netTransport,
+				}
+
 				start := time.Now()
-				tmp = readFile(m)
+				tmp = readFile(m, client)
+				if len(tmp) < 100 {
+					return
+				}
 				delta := time.Now().Sub(start).Seconds() * 1000
 				if *debug {
 					fmt.Printf("  %.02f ms for %d bytes - %s\n", delta, len(tmp), m)
 				}
-				if delta < 4000 && len(tmp) > 100 {
-
-					dial := func(network, address string) (net.Conn, error) {
-						_, port, err := net.SplitHostPort(address)
-						if err != nil {
-							return nil, err
-						}
-						return (&net.Dialer{
-							Timeout: *connTimeout,
-						}).Dial(network, net.JoinHostPort(ip.String(), port))
-					}
-
-					var netTransport = &http.Transport{
-						Dial:                dial,
-						TLSHandshakeTimeout: 30 * time.Second,
-					}
+				if delta < 4000 {
 
 					title := m
 					if len(ips) > 1 {
@@ -246,11 +254,8 @@ func main() {
 						URL:     m,
 						IP:      ip,
 						Latency: delta,
-						Client: http.Client{
-							Timeout:   *connTimeout,
-							Transport: netTransport,
-						},
-						c: make(chan struct{}),
+						Client:  client,
+						c:       make(chan struct{}),
 					})
 					useListMutex.Unlock()
 				}
