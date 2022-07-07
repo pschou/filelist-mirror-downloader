@@ -87,7 +87,11 @@ func (a alpineHash) Write(p []byte) (n int, err error) {
 				a.hashPKGINFO.Reset()
 				a.hashPKGINFO.Write(dat[:pos])
 				s := a.hashPKGINFO.Sum(nil)
-				if *a.expectedPKGINFO != "Q1"+base64.StdEncoding.EncodeToString(s) {
+				// For some odd reason, sometimes this is all lower cased:
+				if strings.ToLower(*a.expectedPKGINFO) != strings.ToLower("Q1"+base64.StdEncoding.EncodeToString(s)) {
+					if *debug {
+						fmt.Printf("  %v != %v\n", *a.expectedPKGINFO, "Q1"+base64.StdEncoding.EncodeToString(s))
+					}
 					return 0, fmt.Errorf("PKGINFO hash mismatch in APK file")
 				} else {
 					//fmt.Println("MATCHED the Checksum!")

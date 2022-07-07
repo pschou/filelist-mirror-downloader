@@ -180,6 +180,9 @@ func main() {
 
 	var wg sync.WaitGroup
 
+	var testTimeout = 4 * time.Second
+	dialTimeout := &testTimeout
+
 	// Test speeds
 	id := 0
 	for _, mm := range mirrors {
@@ -217,7 +220,7 @@ func main() {
 						return nil, err
 					}
 					return (&net.Dialer{
-						Timeout: *connTimeout,
+						Timeout: *dialTimeout,
 					}).Dial(network, net.JoinHostPort(ip.String(), port))
 				}
 
@@ -226,7 +229,7 @@ func main() {
 					TLSHandshakeTimeout: 30 * time.Second,
 				}
 				client := http.Client{
-					Timeout:   *connTimeout,
+					Timeout:   *dialTimeout,
 					Transport: netTransport,
 				}
 
@@ -264,6 +267,8 @@ func main() {
 		}
 	}
 	wg.Wait()
+
+	dialTimeout = connTimeout
 	Shuffle()
 	fmt.Println("Downloading file list using", len(useList), "mirrors...")
 
