@@ -16,4 +16,4 @@ for repo in latest-stable/{main,community}/x86_64 v3.15/main/x86_64; do
 done > alpine_filelist.txt
 
 echo Download the files to a local folder
-./filelist-mirror-downloader -mirrors $mirrors -list alpine_filelist.txt -output $output 
+./filelist-mirror-downloader -mirrors $mirrors -list alpine_filelist.txt -output $output -log alpine_filelist.log

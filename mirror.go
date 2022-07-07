@@ -27,8 +27,6 @@ type Mirror struct {
 	Time     time.Duration
 	inUse    bool
 	queue    []*FileEntry
-	c        chan struct{}
-	c_n      int
 }
 
 func readMirrors(mirrorFile string) []string {
@@ -95,12 +93,6 @@ func ClearUse(id int) {
 	//m.inUse = false
 	for i := range useList {
 		if useList[i].ID == id {
-			if useList[i].c_n > 0 {
-				log.Println("closing, but found a wait", id)
-				// If we have a file waiting for this mirror
-				<-useList[i].c
-				return
-			}
 			useList[i].inUse = false
 			return
 		}

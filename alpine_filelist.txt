@@ -12,11 +12,3 @@
 {alpine}Q1gP6+i3BfVUgI/xawLrCx87yKnbc= 27443 latest-stable/main/x86_64/perl-io-stringy-doc-2.113-r1.apk
 {alpine}Q1cQsv53hbOl5bPq6wD25oauVPC2s= 45296 latest-stable/main/x86_64/avahi-libs-0.8-r6.apk
 {alpine}Q1MVQLewMoD/JOtNJF2q2cJ2jgdVo= 206179 latest-stable/main/x86_64/gpgsm-2.2.35-r4.apk
-{alpine}Q1jnQKG4wBtWbcoknrw87ROlbzKWc= 2135 latest-stable/main/x86_64/spamassassin-openrc-3.4.6-r3.apk
-{alpine}Q1L3AlHlR0wM7gTMVuB7nQnmrsZyc= 6236 latest-stable/main/x86_64/libxpm-doc-3.5.13-r0.apk
-{alpine}Q1ZRJLnpOfBdoPDqTHgUgurvShFHM= 10880 latest-stable/main/x86_64/perl-mime-base64-3.16-r2.apk
-{alpine}Q1JsRlRNF0o2Chq8zfL3hK1tH1RcA= 2529 latest-stable/main/x86_64/agetty-openrc-0.44.10-r7.apk
-{alpine}Q11kJ5KpLAKpDg9R726wBr1loAPGI= 135833 latest-stable/main/x86_64/mksh-59c-r3.apk
-{alpine}Q1l+TKZ/jvFUwDfxIsyzqHAFp76uQ= 158557 latest-stable/main/x86_64/gd-dev-2.3.3-r0.apk
-{alpine}Q1WcP1z/qDx2/hlOQuDJOpFbcUfto= 166402 latest-stable/main/x86_64/py3-mako-1.2.0-r0.apk
-{alpine}Q1PPRBaWhVUZYzDgdthBvs3rQ96AE= 320351 latest-stable/main/x86_64/git-gui-2.36.1-r0.apk

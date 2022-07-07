@@ -258,7 +258,6 @@ func main() {
 						IP:      ip,
 						Latency: delta,
 						Client:  client,
-						c:       make(chan struct{}),
 					})
 					useListMutex.Unlock()
 				}
@@ -502,27 +501,34 @@ func worker(thread int, jobs <-chan *FileEntry, wg *sync.WaitGroup) {
 	for next_job := range jobs {
 		worker_status[thread] = fmt.Sprintf("finding mirror for %s", next_job.path)
 
-		m, any_left := GetMirrorOrQueue(next_job)
-		if !any_left {
-			fmt.Println("Failed: ", next_job.path)
-			getFails++
-		}
-		if m != nil {
-			for _, j := range append(GetQueue(m.ID), next_job) {
-				process(thread, m, j)
+		func() {
+			m, any_left := GetMirrorOrQueue(next_job)
+			if m != nil {
+				defer ClearUse(m.ID)
+				for _, j := range append(GetQueue(m.ID), next_job) {
+					process(thread, m, j)
+				}
 			}
-			ClearUse(m.ID)
-		}
+			if !any_left {
+				fmt.Println("Failed: ", next_job.path)
+				getFails++
+			}
+		}()
 
-		for {
+		process_straggler := func() bool {
 			jobs, m := FindStragglers()
-			if m == nil {
-				break
+			if m != nil {
+				defer ClearUse(m.ID)
+			} else {
+				return false
 			}
 			for _, j := range jobs {
 				process(thread, m, j)
 			}
-			ClearUse(m.ID)
+			return true
+		}
+
+		for process_straggler() {
 		}
 
 		worker_status[thread] = "waiting"
