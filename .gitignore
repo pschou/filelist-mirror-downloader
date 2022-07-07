@@ -5,3 +5,4 @@ yumrepo_test*
 alpine_repo
 *.apk
 *.txt
+*.log
