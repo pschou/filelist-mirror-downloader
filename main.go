@@ -39,6 +39,7 @@ import (
 
 	"github.com/araddon/dateparse"
 	humanize "github.com/dustin/go-humanize"
+	tease "github.com/pschou/go_tease"
 )
 
 var version = "test"
@@ -600,7 +601,7 @@ func process(thread int, m *Mirror, j *FileEntry) {
 			// Could not re-queue, count as a fail
 			getFails++
 		} else if *debug {
-			fmt.Println("requeued %s\n", j.path)
+			fmt.Printf("requeued %s\n", j.path)
 		}
 	}
 }
@@ -721,6 +722,21 @@ func handleFile(m *Mirror, j *FileEntry) error {
 	if fileTimeErr == nil {
 		j.modified = fileTime
 	}
+
+	respBody := io.Reader(resp.Body)
+	//fmt.Println("Ext:", filepath.Ext(output))
+	if fp, ok := file_parser[filepath.Ext(output)]; ok {
+		tr := tease.NewReader(resp.Body)
+		fileDetail := fp(tr)
+		tr.Seek(0, io.SeekStart)
+		tr.Pipe()
+		respBody = tr
+		if fileDetail != nil {
+			//fmt.Println("server:", fileTime, "file:", fileDetail.time)
+			fileTime = fileDetail.time
+		}
+	}
+
 	if after != nil && fileTime.Before(*after) {
 		if logFile != nil {
 			fmt.Fprintln(logFile, "Skipped:", output)
@@ -736,11 +752,12 @@ func handleFile(m *Mirror, j *FileEntry) error {
 		return nil
 	}
 
-	//file, err := os.Create(output)
 	file, err := os.OpenFile(output, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0664)
 	if err != nil {
 		return err
 	}
+
+	writer := io.MultiWriter(file, hashInterface)
 
 	buf := make([]byte, 10000)
 	var readBytes, fileSize int
@@ -751,7 +768,7 @@ func handleFile(m *Mirror, j *FileEntry) error {
 	// Do the download!
 	for readErr != io.EOF {
 		// read from webserver
-		readBytes, readErr = resp.Body.Read(buf)
+		readBytes, readErr = respBody.Read(buf)
 
 		{ // Track download speed
 			m.Bytes += readBytes
@@ -785,12 +802,7 @@ func handleFile(m *Mirror, j *FileEntry) error {
 			return err
 		}
 
-		_, err = file.Write(buf[:readBytes])
-		if err != nil {
-			return err
-		}
-
-		_, err = hashInterface.Write(buf[:readBytes])
+		_, err = writer.Write(buf[:readBytes])
 		if err != nil {
 			return err
 		}
@@ -799,7 +811,7 @@ func handleFile(m *Mirror, j *FileEntry) error {
 
 	if fileSize != j.size {
 		os.Remove(output)
-		return fmt.Errorf("Size mismatch, %d != %s", fileSize, j.size)
+		return fmt.Errorf("Size mismatch, %d != %d", fileSize, j.size)
 	}
 
 	// Check the hash and return any errors

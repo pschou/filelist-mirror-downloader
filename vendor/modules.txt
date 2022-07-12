@@ -1,18 +1,32 @@
 # github.com/araddon/dateparse v0.0.0-20210429162001-6b43995a97de
 ## explicit
 github.com/araddon/dateparse
+# github.com/cavaliergopher/rpm v1.2.0
+## explicit
+github.com/cavaliergopher/rpm
 # github.com/dustin/go-humanize v1.0.0
 ## explicit
 github.com/dustin/go-humanize
 # github.com/miekg/dns v1.1.50
 ## explicit
 github.com/miekg/dns
+# github.com/pschou/go_tease v0.0.0-20220501223706-350142e428cd
+## explicit
+github.com/pschou/go_tease
 # github.com/ulikunitz/xz v0.5.10
 ## explicit
 github.com/ulikunitz/xz
 github.com/ulikunitz/xz/internal/hash
 github.com/ulikunitz/xz/internal/xlog
 github.com/ulikunitz/xz/lzma
+# golang.org/x/crypto v0.0.0-20210921155107-089bfa567519
+golang.org/x/crypto/cast5
+golang.org/x/crypto/openpgp
+golang.org/x/crypto/openpgp/armor
+golang.org/x/crypto/openpgp/elgamal
+golang.org/x/crypto/openpgp/errors
+golang.org/x/crypto/openpgp/packet
+golang.org/x/crypto/openpgp/s2k
 # golang.org/x/mod v0.4.2
 golang.org/x/mod/semver
 # golang.org/x/net v0.0.0-20210726213435-c6fcb2dbf985
