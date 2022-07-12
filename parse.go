@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-var file_parser = map[string]func(io.Reader) *file_detail{}
+var file_parser = map[string]func(io.ReaderAt) *file_detail{}
 
 type file_detail struct {
 	name string

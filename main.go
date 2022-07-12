@@ -724,7 +724,6 @@ func handleFile(m *Mirror, j *FileEntry) error {
 	}
 
 	respBody := io.Reader(resp.Body)
-	//fmt.Println("Ext:", filepath.Ext(output))
 	if fp, ok := file_parser[filepath.Ext(output)]; ok {
 		tr := tease.NewReader(resp.Body)
 		fileDetail := fp(tr)
@@ -732,7 +731,9 @@ func handleFile(m *Mirror, j *FileEntry) error {
 		tr.Pipe()
 		respBody = tr
 		if fileDetail != nil {
-			//fmt.Println("server:", fileTime, "file:", fileDetail.time)
+			if *debug {
+				fmt.Println("Time check for", output, "server:", fileTime, "file:", fileDetail.time.UTC())
+			}
 			fileTime = fileDetail.time
 		}
 	}

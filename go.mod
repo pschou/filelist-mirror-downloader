@@ -9,4 +9,9 @@ require (
 	github.com/miekg/dns v1.1.50
 	github.com/pschou/go_tease v0.0.0-20220501223706-350142e428cd
 	github.com/ulikunitz/xz v0.5.10
+	pault.ag/go/debian v0.12.0
 )
+
+replace pault.ag/go/debian => /home/schou/git/go-debian
+
+replace pault.ag/go/debian/deb => /home/schou/git/go-debian/deb

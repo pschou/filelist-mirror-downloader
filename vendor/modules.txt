@@ -7,6 +7,16 @@ github.com/cavaliergopher/rpm
 # github.com/dustin/go-humanize v1.0.0
 ## explicit
 github.com/dustin/go-humanize
+# github.com/kjk/lzma v0.0.0-20161016003348-3fd93898850d
+github.com/kjk/lzma
+# github.com/klauspost/compress v1.15.7
+github.com/klauspost/compress
+github.com/klauspost/compress/fse
+github.com/klauspost/compress/huff0
+github.com/klauspost/compress/internal/cpuinfo
+github.com/klauspost/compress/internal/snapref
+github.com/klauspost/compress/zstd
+github.com/klauspost/compress/zstd/internal/xxhash
 # github.com/miekg/dns v1.1.50
 ## explicit
 github.com/miekg/dns
@@ -19,10 +29,13 @@ github.com/ulikunitz/xz
 github.com/ulikunitz/xz/internal/hash
 github.com/ulikunitz/xz/internal/xlog
 github.com/ulikunitz/xz/lzma
+# github.com/xi2/xz v0.0.0-20171230120015-48954b6210f8
+github.com/xi2/xz
 # golang.org/x/crypto v0.0.0-20210921155107-089bfa567519
 golang.org/x/crypto/cast5
 golang.org/x/crypto/openpgp
 golang.org/x/crypto/openpgp/armor
+golang.org/x/crypto/openpgp/clearsign
 golang.org/x/crypto/openpgp/elgamal
 golang.org/x/crypto/openpgp/errors
 golang.org/x/crypto/openpgp/packet
@@ -55,3 +68,15 @@ golang.org/x/tools/internal/typesinternal
 # golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1
 golang.org/x/xerrors
 golang.org/x/xerrors/internal
+# pault.ag/go/debian v0.12.0 => /home/schou/git/go-debian
+## explicit
+pault.ag/go/debian/control
+pault.ag/go/debian/deb
+pault.ag/go/debian/dependency
+pault.ag/go/debian/hashio
+pault.ag/go/debian/internal
+pault.ag/go/debian/version
+# pault.ag/go/topsort v0.0.0-20160530003732-f98d2ad46e1a
+pault.ag/go/topsort
+# pault.ag/go/debian => /home/schou/git/go-debian
+# pault.ag/go/debian/deb => /home/schou/git/go-debian/deb
