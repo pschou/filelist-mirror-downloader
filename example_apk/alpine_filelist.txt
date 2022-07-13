@@ -1,0 +1,14 @@
+# Alpine-diff matchup, version: 0.1.20220404.2223
+# new: /dev/shm/alpine_repo/latest-stable/main/x86_64/APKINDEX.tar.gz old: 
+# filelist size: 3.6 GB
+{alpine}Q1VUBxlP54+nXCR+xuJZq3y37aJ8A= 19973 latest-stable/main/x86_64/nagios-plugins-ide_smart-2.4.0-r0.apk
+{alpine}Q1ZX+on7zBgcokTctj4tLSmx7q5O4= 97492 latest-stable/main/x86_64/git-zsh-completion-5.8.1-r4.apk
+{alpine}Q1pp8f3F0BeSAcP86in2WFUGjIflk= 15319 latest-stable/main/x86_64/perl-timedate-doc-2.33-r1.apk
+{alpine}Q1SpVtrT1evSZ42uukxRj56fsMSKE= 4090 latest-stable/main/x86_64/uwsgi-pam-2.0.20-r0.apk
+{alpine}Q1u3Og7/WFpbmKnKPcoKRKV9tU1Wo= 13115 latest-stable/main/x86_64/xkeyboard-config-doc-2.35.1-r0.apk
+{alpine}Q1S/bC7NCFKTt4nUv/+vLqIiwKi0g= 6025 latest-stable/main/x86_64/perl-encode-locale-doc-1.05-r3.apk
+{alpine}Q1Xn2EYjZW/9FXh8J9Johivu4mfes= 6189 latest-stable/main/x86_64/perl-crypt-openssl-rsa-doc-0.32-r2.apk
+{alpine}Q1TyA7RkgUQ1klHwa9BMynxNiuNC4= 1691066 latest-stable/main/x86_64/po4a-doc-0.66-r0.apk
+{alpine}Q1gP6+i3BfVUgI/xawLrCx87yKnbc= 27443 latest-stable/main/x86_64/perl-io-stringy-doc-2.113-r1.apk
+{alpine}Q1cQsv53hbOl5bPq6wD25oauVPC2s= 45296 latest-stable/main/x86_64/avahi-libs-0.8-r6.apk
+{alpine}Q1MVQLewMoD/JOtNJF2q2cJ2jgdVo= 206179 latest-stable/main/x86_64/gpgsm-2.2.35-r4.apk

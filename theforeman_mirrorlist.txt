@@ -1,1 +1,0 @@
-https://yum.theforeman.org/releases
