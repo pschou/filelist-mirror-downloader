@@ -2,7 +2,4 @@ output
 test
 alpine_test*
 yumrepo_test*
-alpine_repo*
-*.apk
-*.txt
-*.log
+alpine_test*

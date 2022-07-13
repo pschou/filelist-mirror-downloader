@@ -1,0 +1,6 @@
+# Debian-diff matchup, version: 0.1.20220323.2212
+# new: NEW_Packages.gz old: OLD_Packages.gz
+# repodir: 
+{sha256}29b34583ab9182da3b5344f8bd5aba6d82b742208d520351fe446264a7e2a1e8 14616 /pool/main/2/2048/2048_0.20210105.1243-1_amd64.deb
+{sha256}a7e575e574629d6151f27507b4c9b49bef3ad46ffaa08321ea487568c0153b65 1393256 /pool/main/2/2048-qt/2048-qt_0.1.6-2+b2_amd64.deb
+{sha256}7e57e6f7a537223ed509fb1b3028b61e682c9189a3aa3a67e7e8e723b869c094 34256 /pool/main/2/2ping/2ping_4.5-1_all.deb
