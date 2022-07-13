@@ -11,6 +11,7 @@ func init() {
 
 func ParseAPKFile(in ReadAtReader) *file_detail {
 	if gzr, err := gzip.NewReader(in); err == nil {
+		defer gzr.Close()
 		gzr.Multistream(false)
 		if tf := tar.NewReader(gzr); tf != nil {
 			if hdr, err := tf.Next(); err == nil {
