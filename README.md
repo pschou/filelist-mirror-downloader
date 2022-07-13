@@ -1,7 +1,12 @@
 # Filelist Mirror Downloader
 
-This shim takes a file list and a mirror list and downloads the files in the file list
-while doing checksums and parallel downloads for speed.
+This shim takes a file list and a mirror list and downloads the files in the
+file list while doing checksums and parallel downloads for speed.
+
+When packages are downloaded (specifically DEB, RPM and APK), the time stamps
+of the file are derived from the contents of the file.  This way if a mirror
+has had all the files touched to another time stamp, the correct timestamp is
+restored.
 
 # Example usage:
 CentOS / Yum repo
