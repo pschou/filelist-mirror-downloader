@@ -265,6 +265,15 @@ func main() {
 	}
 	wg.Wait()
 
+	// Expand the mirror list to allow the threading to work
+	for len(useList) < *threads {
+		count := len(useList)
+		for _, ul := range useList {
+			ul.ID += count
+			useList = append(useList, ul)
+		}
+	}
+
 	Shuffle()
 	fmt.Println("Downloading file list using", len(useList), "mirrors...")
 
