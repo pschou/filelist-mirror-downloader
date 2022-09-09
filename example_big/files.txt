@@ -1,0 +1,16 @@
+{sha256}a3dfb1b724fd1c03c4c8d78983c8a93114ca5ad0d11d5e0379ac7bc31cf89e8b 594861637 compute/cuda/repos/rhel8/x86_64/libcufft-devel-11-4-10.5.0.43-1.x86_64.rpm
+{sha256}6c9813ebbf85aa7c215c2982ca02e1d6ff838998732385f77fa5bb6e5bc1cf58 466238872 compute/cuda/repos/rhel8/x86_64/libcudnn8-devel-8.0.5.39-1.cuda11.0.x86_64.rpm
+{sha256}4f7d46c4e0e6aa19e3e356f8a8ac1fc5b6b354091453a72ca147b4dcc25d6d2f 675171631 compute/cuda/repos/rhel8/x86_64/libcudnn8-devel-8.0.5.39-1.cuda11.1.x86_64.rpm
+{sha256}da5fd29f5bbb3f8d02c3287095048322ab8b0639fe28ab54cd8c3fc89d1dc3ae 592805788 compute/cuda/repos/rhel8/x86_64/libcudnn8-devel-8.1.0.77-1.cuda11.2.x86_64.rpm
+{sha256}97952e1f48ebcfbbfcb87d39dd3e447c8cedf275ae04a80be4c8f48c0ef5b13c 578347184 compute/cuda/repos/rhel8/x86_64/libcudnn8-devel-8.1.1.33-1.cuda11.2.x86_64.rpm
+{sha256}78f2687509b72c7297dcef1cf7074f49f0e02d3c2e83ebdd252a892928d278c3 377540530 compute/cuda/repos/rhel8/x86_64/libcudnn8-devel-8.2.0.53-1.cuda10.2.x86_64.rpm
+{sha256}d14b9d0119aaaaf117e55d883ee33cd67a287d548fa55c62a1059e20f0fe3064 643768931 compute/cuda/repos/rhel8/x86_64/libcudnn8-devel-8.2.0.53-1.cuda11.3.x86_64.rpm
+{sha256}d299b34643b639a99ac9fcba8ece5f658d8a8c2ead4a9d742006962074d9dcef 654853951 compute/cuda/repos/rhel8/x86_64/libcudnn8-devel-8.2.1.32-1.cuda11.3.x86_64.rpm
+{sha256}58ab452ee9aaf5d2da6ccc9ededa9d8af1cf41a53638edcf383372e5e74cc256 609394560 compute/cuda/repos/rhel8/x86_64/libcudnn8-8.0.5.39-1.cuda11.0.x86_64.rpm
+{sha256}00480040e9fc49f364e9b0285847cedd16527c15b252453f7c898e75bef07e8d 862963613 compute/cuda/repos/rhel8/x86_64/libcudnn8-8.0.5.39-1.cuda11.1.x86_64.rpm
+{sha256}d5803fc1449b77d1b1332e8389724aa2b1c85cbfb18a25070fd15ec2bc70444b 724843763 compute/cuda/repos/rhel8/x86_64/libcudnn8-8.1.0.77-1.cuda11.2.x86_64.rpm
+{sha256}d07cc2e4550ded68fe2da109bd92e4e84cf954759544d4524b4c27b0c41cbd22 709555475 compute/cuda/repos/rhel8/x86_64/libcudnn8-8.1.1.33-1.cuda11.2.x86_64.rpm
+{sha256}dc55b0729947f210e5598864c71ef48e900d8be46ad66ec4bd3194a6ec4f2587 776479227 compute/cuda/repos/rhel8/x86_64/libcudnn8-8.2.0.53-1.cuda11.3.x86_64.rpm
+{sha256}3d7627b3053fb1482eef6a6137f757a7692cdb18c37e3c0b414d3fe0b981d17a 786957383 compute/cuda/repos/rhel8/x86_64/libcudnn8-8.2.1.32-1.cuda11.3.x86_64.rpm
+{sha256}33f043b73ae4014087a34c0faf7e2bf19ef257cfda775e57edcab1bf30a59453 806537658 compute/cuda/repos/rhel8/x86_64/libcudnn8-8.2.2.26-1.cuda11.4.x86_64.rpm
+{sha256}277eb91ec5f809a2862716b5d9d830caf684ab64270ac2a9b4d977caee73c98f 335394299 compute/cuda/repos/rhel8/x86_64/nsight-compute-2020.3.0-2020.3.0.18-1.x86_64.rpm
