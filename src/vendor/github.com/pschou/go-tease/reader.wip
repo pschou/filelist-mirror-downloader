@@ -1,0 +1,238 @@
+package tease
+
+import (
+	"bytes"
+	"errors"
+	"fmt"
+	"io"
+)
+
+type Reader struct {
+	r     io.Reader
+	r_pos int64
+	pos   int64
+	buf   bytes.Buffer
+	pipe  bool
+	reset *func() error
+	eof   bool
+}
+
+func NewReader(r io.Reader) *Reader {
+	return &Reader{r: r}
+}
+
+func (c *Reader) ResetFunc(f func() error) {
+	c.reset = &f
+}
+
+/*func (c *Reader) Close() {
+	c.r = nil
+	c.r_pos = 0
+	c.buf.Reset()
+}*/
+func (c *Reader) Stats() {
+	fmt.Println("r.pos =", c.r_pos, "c.pos =", c.pos, "pipe =", c.pipe, "eof =", c.eof, "buf len =", c.buf.Len())
+}
+func (c *Reader) Pipe() {
+	c.pipe = true
+	r := ForwardMultiReadSeeker(c.buf, c.r)
+	r.Seek(c.pos, io.SeekStart)
+	c.r = r
+}
+
+func (c *Reader) Seek(offset int64, whence int) (int64, error) {
+	var abs int64
+	switch whence {
+	case io.SeekStart:
+		abs = offset
+	case io.SeekCurrent:
+		abs = c.pos + offset
+	case io.SeekEnd:
+		return 0, errors.New("Reader.Seek: not implemented, seek from end")
+	default:
+		return 0, errors.New("Reader.Seek: invalid whence")
+	}
+	if abs < 0 {
+		return 0, errors.New("Reader.Seek: negative position")
+	}
+
+	if c.pipe {
+		//fmt.Println("r.pos =", c.r_pos, "c.pos =", c.pos, "abs =", abs, "whence =", whence, "offset =", offset)
+		if abs == c.pos {
+			return c.pos, nil
+		}
+		if abs < c.pos {
+			if c.reset == nil {
+				return 0, errors.New("Reader already piped, cannot go backwards!")
+			} else {
+				reset := *c.reset
+				err := reset()
+				if err != nil {
+					return 0, err
+				}
+				c.pos, c.r_pos = 0, 0
+			}
+		}
+		if c.pos > int64(c.buf.Len()) {
+			c.buf.Reset()
+		}
+		cur_r := c.r_pos
+		n, err := c.seekTo(abs, false)
+		//fmt.Println("... added", n)
+		c.pos = cur_r + n
+
+		//c.pos = int64(n)
+		return c.pos, err
+	}
+
+	cur_r := c.r_pos
+	//fmt.Println("buf seek")
+	n, err := c.seekTo(abs, true)
+	c.pos = cur_r + n
+	if abs < c.pos {
+		c.pos = abs
+	}
+	//fmt.Println("abs=", abs, "n", n, "c.pos", c.pos)
+	//c.pos += int64(n)
+	//fmt.Println("c.pos", c.pos)
+	return c.pos, err
+}
+
+func (c *Reader) Read(b []byte) (n int, err error) {
+
+	if c.pipe && c.buf.Len() == 0 {
+		n, err = c.r.Read(b)
+		c.pos += int64(n)
+		c.r_pos += int64(n)
+		return
+	}
+	n, err = c.ReadAt(b, c.pos)
+	if c.pipe && err == io.EOF {
+		c.eof = true
+	}
+	return
+}
+
+func (c *Reader) ReadAt(p []byte, off int64) (n int, err error) {
+	fmt.Println("readat called", len(p), "off", off, "pos", c.r_pos)
+	var np int
+	if c.pipe {
+		if off < c.pos {
+			if c.reset == nil {
+				return 0, errors.New("Reader already piped, cannot go backwards!")
+			} else {
+				reset := *c.reset
+				err = reset()
+				if err != nil {
+					return
+				}
+				c.pos, c.r_pos = 0, 0
+			}
+		}
+
+		if off < int64(c.buf.Len()) {
+			{ // Section to use buffer
+				bufBytes := c.buf.Bytes()
+				np = copy(p, bufBytes[off:])
+				fmt.Println("...copied", np)
+				n += np
+
+				// We've filled everything from just the buffer
+				if n == len(p) {
+					c.pos = off + int64(n)
+					return n, nil
+				}
+			}
+
+			// Collapse the buf to save memory
+			c.buf.Reset()
+
+			// We need more from the reader
+			np, err = c.r.Read(p[n:])
+			n = n + np
+			c.r_pos = c.r_pos + int64(np)
+			return
+		}
+
+		//fmt.Println("readat calling seek", off)
+		_, err = c.seekTo(off, false)
+		if err != nil {
+			return
+		}
+		np, err = c.r.Read(p[n:])
+		fmt.Println("...read", np)
+		n = n + np
+		c.r_pos = c.r_pos + int64(np)
+		c.pos = c.pos + int64(np)
+		return
+	}
+
+	// Non pipe reader, just fills the buffer
+	// Seek by filling buffer
+	//fmt.Println("readat seekto called", off, len(p))
+	//var nn int64
+	_, err = c.seekTo(off+int64(len(p)), true)
+	//fmt.Println("readat seekto returned", nn, err)
+	//if err != nil && err != io.EOF {
+	//	return n, nil
+	//}
+
+	// Read off the slice
+	bufBytes := c.buf.Bytes()
+	n = copy(p, bufBytes[off:])
+	fmt.Println("...copied", n)
+	return n, err
+}
+
+func (c *Reader) seekTo(off int64, fill bool) (n int64, err error) {
+	if off > c.r_pos {
+		buf := make([]byte, 10000)
+		bl := int64(len(buf))
+		var tr int64
+		var np int
+		//fmt.Println("c.r_pos", c.r_pos, "off", off)
+		for tr = off - c.r_pos; tr > 0; tr -= bl {
+			if tr < bl {
+				bl = tr
+			}
+			//fmt.Println("c.r_pos", c.r_pos, "np", np, "n", n, "bl", bl)
+			np, err = c.r.Read(buf[:bl])
+			n += int64(np)
+			c.r_pos += int64(np)
+			if fill {
+				c.buf.Write(buf[:bl])
+			}
+			if err != nil || int64(np) != bl {
+				if err == io.EOF {
+					c.eof = true
+				}
+				break
+			}
+		}
+	}
+	return
+}
+
+func (c *Reader) seekTo_old(off int64) (n int64, err error) {
+	if off > c.r_pos {
+		buf := make([]byte, 10000)
+		bl := int64(len(buf))
+		var tr int64
+		var np int
+		for tr = off - c.r_pos; tr > 0; tr -= bl {
+			if tr < bl {
+				bl = tr
+			}
+			np, err = c.r.Read(buf[:bl])
+			n += int64(np)
+			c.r_pos += int64(np)
+			if err != nil || int64(np) != bl {
+				if err == io.EOF {
+					c.eof = true
+				}
+				break
+			}
+		}
+	}
+	return
+}

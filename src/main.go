@@ -39,7 +39,8 @@ import (
 
 	"github.com/araddon/dateparse"
 	humanize "github.com/dustin/go-humanize"
-	tease "github.com/pschou/go_tease"
+	tease "github.com/pschou/go-tease"
+	"golang.org/x/crypto/openpgp"
 )
 
 var version = "test"
@@ -56,6 +57,7 @@ var duplicates *string
 var after, before *time.Time
 var logFile *os.File
 var outputPath *string
+var keyring openpgp.EntityList
 
 var useListMutex sync.Mutex
 var useList MirrorList // List of mirrors to use
@@ -96,6 +98,7 @@ func main() {
 	debug = flag.Bool("debug", false, "Turn on debug comments")
 	//testOnly = flag.Bool("test", false, "Just validate downloaded files")
 	duplicates = flag.String("dup", "symlink", "What to do with duplicates: omit, copy, symlink, hardlink")
+	keyringFile := flag.String("keyring", "", "Use keyring for verifying signed package files (example: keyring.gpg or keys/ directory)")
 
 	var afterStr = flag.String("after", "", "Select packages after specified date\n"+
 		"Date formats supported: https://github.com/araddon/dateparse")
@@ -103,6 +106,35 @@ func main() {
 		"Date formats supported: https://github.com/araddon/dateparse")
 
 	flag.Parse()
+
+	if *keyringFile != "" {
+		fmt.Println("Loading keys from", *keyringFile)
+		if _, ok := isDirectory(*keyringFile); ok {
+			//keyring = openpgp.EntityList{}
+			for _, file := range getFiles(*keyringFile, ".gpg") {
+				//fmt.Println("loading key", file)
+				gpgFile, err := os.ReadFile(file)
+				if err != nil {
+					log.Fatal("Error reading keyring file", err)
+				}
+				fileKeys, err := loadKeys(gpgFile)
+				if err != nil {
+					log.Fatal("Error loading keyring file", err)
+				}
+				//fmt.Println("  found", len(fileKeys), "keys")
+				keyring = append(keyring, fileKeys...)
+			}
+		} else {
+			gpgFile, err := os.ReadFile(*keyringFile)
+			if err != nil {
+				log.Fatal("Error reading keyring file", err)
+			}
+			keyring, err = loadKeys(gpgFile)
+			if err != nil {
+				log.Fatal("Error loading keyring file", err)
+			}
+		}
+	}
 
 	if *logFilePath != "" {
 		var err error
@@ -697,6 +729,7 @@ func handleFile(m *Mirror, j *FileEntry) error {
 		os.Remove(output)
 	}
 
+	// Build a hash interface for verification of downloads, reading bytes 0-N
 	hashInterface := getHash(j.hash)
 	if hashInterface == nil {
 		return fmt.Errorf("Unknown hash type for: %s", j.hash)
@@ -729,12 +762,14 @@ func handleFile(m *Mirror, j *FileEntry) error {
 	}
 
 	respBody := io.Reader(resp.Body)
+
+	// Tease out reading the file to get the header for the date information
 	if fp, ok := file_parser[filepath.Ext(output)]; ok {
 		tr := tease.NewReader(resp.Body)
 		fileDetail := fp(tr)
-		tr.Seek(0, io.SeekStart)
-		tr.Pipe()
-		respBody = tr
+		tr.Seek(0, io.SeekStart) // Return to the beginning of the tease reader
+		tr.Pipe()                // Flatten the tease reader to an io.Reader
+		respBody = tr            // Set the respBody to the tease reader
 		if fileDetail != nil {
 			if *debug {
 				fmt.Println("Parsing time for", output, "-- server:", fileTime.UTC(), "file:", fileDetail.time.UTC())
@@ -743,6 +778,7 @@ func handleFile(m *Mirror, j *FileEntry) error {
 		}
 	}
 
+	// If the after time is set and the time is before the after time, skip the file
 	if after != nil && fileTime.Before(*after) {
 		if logFile != nil {
 			fmt.Fprintln(logFile, "Skipped:", output)
@@ -750,6 +786,8 @@ func handleFile(m *Mirror, j *FileEntry) error {
 		getSkip++
 		return nil
 	}
+
+	// If the before time is set and the time is after the before time, skip the file
 	if before != nil && fileTime.After(*before) {
 		if logFile != nil {
 			fmt.Fprintln(logFile, "Skipped:", output)
@@ -758,12 +796,30 @@ func handleFile(m *Mirror, j *FileEntry) error {
 		return nil
 	}
 
+	// Open the file for writing
 	file, err := os.OpenFile(output, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0664)
 	if err != nil {
 		return err
 	}
 
-	writer := io.MultiWriter(file, hashInterface)
+	targetWriters := []io.Writer{file, hashInterface}
+
+	var checksumResult = make(chan bool)
+	var pipeWriter *io.PipeWriter
+
+	// If a keyring has been specified, include a GPG check
+	if keyring != nil {
+		// If we don't have a handler for a file type, we fail to letting it pass,
+		// as this is a secondary check, the checksum is the primary check
+		if fp, ok := file_gpg_check[filepath.Ext(output)]; ok {
+			var pipeReader *io.PipeReader
+			pipeReader, pipeWriter = io.Pipe()
+			targetWriters = append(targetWriters, pipeWriter)
+			go fp(pipeReader, output, checksumResult)
+		}
+	}
+
+	writer := io.MultiWriter(targetWriters...)
 
 	buf := make([]byte, 10000)
 	var readBytes, fileSize int
@@ -818,6 +874,20 @@ func handleFile(m *Mirror, j *FileEntry) error {
 	if fileSize != j.size {
 		os.Remove(output)
 		return fmt.Errorf("Size mismatch, %d != %d", fileSize, j.size)
+	}
+
+	if pipeWriter != nil {
+		pipeWriter.Close()
+		if <-checksumResult {
+			if *debug {
+				fmt.Println("PGP check passed")
+			}
+		} else {
+			if *debug {
+				fmt.Println("PGP check failed")
+			}
+			return fmt.Errorf("PGP check failed")
+		}
 	}
 
 	// Check the hash and return any errors

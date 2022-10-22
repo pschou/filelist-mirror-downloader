@@ -1,9 +1,6 @@
 # github.com/araddon/dateparse v0.0.0-20210429162001-6b43995a97de
 ## explicit
 github.com/araddon/dateparse
-# github.com/cavaliergopher/rpm v1.2.0
-## explicit
-github.com/cavaliergopher/rpm
 # github.com/dustin/go-humanize v1.0.0
 ## explicit
 github.com/dustin/go-humanize
@@ -20,9 +17,12 @@ github.com/klauspost/compress/zstd/internal/xxhash
 # github.com/miekg/dns v1.1.50
 ## explicit
 github.com/miekg/dns
-# github.com/pschou/go_tease v0.0.0-20220501223706-350142e428cd
+# github.com/pschou/go-rpm v0.0.0-00010101000000-000000000000 => /home/schou/git/go-rpm
 ## explicit
-github.com/pschou/go_tease
+github.com/pschou/go-rpm
+# github.com/pschou/go-tease v0.0.0-20220501223706-350142e428cd => /home/schou/git/go-tease
+## explicit
+github.com/pschou/go-tease
 # github.com/ulikunitz/xz v0.5.10
 ## explicit
 github.com/ulikunitz/xz
@@ -32,6 +32,7 @@ github.com/ulikunitz/xz/lzma
 # github.com/xi2/xz v0.0.0-20171230120015-48954b6210f8
 github.com/xi2/xz
 # golang.org/x/crypto v0.0.0-20210921155107-089bfa567519
+## explicit
 golang.org/x/crypto/cast5
 golang.org/x/crypto/openpgp
 golang.org/x/crypto/openpgp/armor
@@ -80,3 +81,5 @@ pault.ag/go/debian/version
 pault.ag/go/topsort
 # pault.ag/go/debian => /home/schou/git/go-debian
 # pault.ag/go/debian/deb => /home/schou/git/go-debian/deb
+# github.com/pschou/go-rpm => /home/schou/git/go-rpm
+# github.com/pschou/go-tease => /home/schou/git/go-tease
