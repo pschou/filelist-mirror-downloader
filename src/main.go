@@ -40,7 +40,6 @@ import (
 	"github.com/araddon/dateparse"
 	humanize "github.com/dustin/go-humanize"
 	tease "github.com/pschou/go-tease"
-	"golang.org/x/crypto/openpgp"
 )
 
 var version = "test"
@@ -56,8 +55,7 @@ var totalBytes uint64
 var duplicates *string
 var after, before *time.Time
 var logFile *os.File
-var outputPath *string
-var keyring openpgp.EntityList
+var outputPath, keyringFile *string
 
 var useListMutex sync.Mutex
 var useList MirrorList // List of mirrors to use
@@ -98,7 +96,7 @@ func main() {
 	debug = flag.Bool("debug", false, "Turn on debug comments")
 	//testOnly = flag.Bool("test", false, "Just validate downloaded files")
 	duplicates = flag.String("dup", "symlink", "What to do with duplicates: omit, copy, symlink, hardlink")
-	keyringFile := flag.String("keyring", "", "Use keyring for verifying signed package files (example: keyring.gpg or keys/ directory)")
+	keyringFile = flag.String("keyring", "", "Use keyring for verifying signed package files (example: keyring.gpg or keys/ directory)")
 
 	var afterStr = flag.String("after", "", "Select packages after specified date\n"+
 		"Date formats supported: https://github.com/araddon/dateparse")
@@ -111,29 +109,37 @@ func main() {
 		fmt.Println("Loading keys from", *keyringFile)
 		if _, ok := isDirectory(*keyringFile); ok {
 			//keyring = openpgp.EntityList{}
-			for _, file := range getFiles(*keyringFile, ".gpg") {
-				//fmt.Println("loading key", file)
+			for _, file := range getFiles(*keyringFile, []string{".pub", ".gpg", ".pgp"}) {
+				fmt.Println("loading key", file)
 				gpgFile, err := os.ReadFile(file)
 				if err != nil {
 					log.Fatal("Error reading keyring file", err)
 				}
-				fileKeys, err := loadKeys(gpgFile)
+				p, r, err := loadKeys(gpgFile)
 				if err != nil {
 					log.Fatal("Error loading keyring file", err)
 				}
-				//fmt.Println("  found", len(fileKeys), "keys")
-				keyring = append(keyring, fileKeys...)
+				fmt.Println("  found", len(p)+len(r), "keys")
+				//if pgpkey, ok := fileKeys.(openpgp.EntityList); ok {
+				pgpKeys = append(pgpKeys, p...)
+				rsaKeys = append(rsaKeys, r...)
+				//}
 			}
 		} else {
 			gpgFile, err := os.ReadFile(*keyringFile)
 			if err != nil {
 				log.Fatal("Error reading keyring file", err)
 			}
-			keyring, err = loadKeys(gpgFile)
+			p, r, err := loadKeys(gpgFile)
 			if err != nil {
 				log.Fatal("Error loading keyring file", err)
 			}
+			//if pgpkey, ok := fileKEys.(openpgp.EntityList); ok {
+			pgpKeys = append(pgpKeys, p...)
+			rsaKeys = append(rsaKeys, r...)
+			//}
 		}
+		fmt.Println("Key count:", len(pgpKeys), "pgp keys", len(rsaKeys), "rsa keys")
 	}
 
 	if *logFilePath != "" {
@@ -259,7 +265,7 @@ func main() {
 					TLSHandshakeTimeout: 30 * time.Second,
 				}
 				client := http.Client{
-					Timeout:   *connTimeout,
+					Timeout:   5 * time.Second,
 					Transport: netTransport,
 				}
 
@@ -272,12 +278,13 @@ func main() {
 				if *debug {
 					fmt.Printf("  %.02f ms for %d bytes - %s\n", delta, len(tmp), m)
 				}
-				if delta < 4000 {
+				if delta < 2000 {
 
 					title := m
 					if len(ips) > 1 {
 						title += " (" + ip.String() + ")"
 					}
+					client.Timeout = *connTimeout
 
 					useListMutex.Lock()
 					id++
@@ -808,10 +815,10 @@ func handleFile(m *Mirror, j *FileEntry) error {
 	var pipeWriter *io.PipeWriter
 
 	// If a keyring has been specified, include a GPG check
-	if keyring != nil {
+	if *keyringFile != "" {
 		// If we don't have a handler for a file type, we fail to letting it pass,
 		// as this is a secondary check, the checksum is the primary check
-		if fp, ok := file_gpg_check[filepath.Ext(output)]; ok {
+		if fp, ok := file_sig_check[filepath.Ext(output)]; ok {
 			var pipeReader *io.PipeReader
 			pipeReader, pipeWriter = io.Pipe()
 			targetWriters = append(targetWriters, pipeWriter)
@@ -876,24 +883,32 @@ func handleFile(m *Mirror, j *FileEntry) error {
 		return fmt.Errorf("Size mismatch, %d != %d", fileSize, j.size)
 	}
 
-	if pipeWriter != nil {
-		pipeWriter.Close()
-		if <-checksumResult {
-			if *debug {
-				fmt.Println("PGP check passed")
-			}
-		} else {
-			if *debug {
-				fmt.Println("PGP check failed")
-			}
-			return fmt.Errorf("PGP check failed")
-		}
-	}
-
 	// Check the hash and return any errors
 	err = checkHash(j.hash, hashInterface)
 	if err == nil {
 		getDownloaded++
+
+		// Now we can also verify the key signature if the check was started
+		if pipeWriter != nil {
+			pipeWriter.Close()
+			if <-checksumResult {
+				if *debug {
+					fmt.Println("Signature check passed or skipped")
+				}
+			} else {
+				if *debug {
+					fmt.Println("Signature check failed")
+				}
+				if logFile != nil {
+					fmt.Fprintln(logFile, "SignatureFail:", output)
+				}
+				// We return nil here as the file passed the checksum but failed
+				// signature check, it's a out-of-trust signed file in a repo, and
+				// like a bad apple in the bushel, should not be trusted.
+				return nil
+			}
+		}
+
 		if logFile != nil {
 			fmt.Fprintln(logFile, "Fetched:", output)
 		}

@@ -19,4 +19,4 @@ type ReadAtReader interface {
 	io.ReaderAt
 }
 
-var file_gpg_check = map[string]func(io.Reader, string, chan bool){}
+var file_sig_check = map[string]func(io.Reader, string, chan bool){}

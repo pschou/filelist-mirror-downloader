@@ -13,7 +13,7 @@ import (
 
 func init() {
 	file_parser[".rpm"] = ParseRPMFile
-	file_gpg_check[".rpm"] = CheckRPMFile
+	file_sig_check[".rpm"] = CheckRPMFile
 }
 
 func ParseRPMFile(in ReadAtReader) *file_detail {
@@ -125,7 +125,7 @@ func CheckRPMFile(fi io.Reader, name string, result chan bool) {
 
 	tr.Pipe()
 
-	signer, err := openpgp.CheckDetachedSignature(keyring, fi, bytes.NewReader(pgpData))
+	signer, err := openpgp.CheckDetachedSignature(pgpKeys, fi, bytes.NewReader(pgpData))
 	if err != nil {
 		return
 	}
