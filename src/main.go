@@ -119,7 +119,7 @@ func main() {
 				if err != nil {
 					log.Fatal("Error loading keyring file", err)
 				}
-				fmt.Println("  found", len(p)+len(r), "keys")
+				//fmt.Println("  found", len(p)+len(r), "keys")
 				//if pgpkey, ok := fileKeys.(openpgp.EntityList); ok {
 				pgpKeys = append(pgpKeys, p...)
 				rsaKeys = append(rsaKeys, r...)
