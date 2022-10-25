@@ -924,6 +924,8 @@ func handleFile(m *Mirror, j *FileEntry) error {
 func getHash(hash string) hash.Hash {
 	hash = strings.ToLower(hash)
 	switch {
+	case strings.HasPrefix(hash, "{none}"):
+		return sha1.New()
 	case strings.HasPrefix(hash, "{sha1}"):
 		return sha1.New()
 	case strings.HasPrefix(hash, "{sha}"):
@@ -947,6 +949,8 @@ func getHash(hash string) hash.Hash {
 func checkHash(orig_hash string, h hash.Hash) error {
 	hash := strings.ToLower(orig_hash)
 	switch {
+	case strings.HasPrefix(hash, "{none}"):
+		return nil
 	case strings.HasPrefix(hash, "{sha1}"):
 		if strings.EqualFold(strings.TrimPrefix(hash, "{sha1}"), fmt.Sprintf("%x", h.Sum(nil))) {
 			return nil
