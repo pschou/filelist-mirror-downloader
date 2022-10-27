@@ -403,6 +403,11 @@ func main() {
 		}
 	}
 
+	if totalCount == 0 {
+		fmt.Println("No files need to be downloaded")
+		return
+	}
+
 	// Loop over compressed files and add compressed to uncompressed
 	for _, entry := range compressed {
 		for _, entry_path := range append(entry.dups, entry.path) {
