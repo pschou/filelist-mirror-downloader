@@ -20,6 +20,7 @@ import (
 	"crypto/sha1"
 	"crypto/sha256"
 	"crypto/sha512"
+	"crypto/tls"
 	"flag"
 	"fmt"
 	"hash"
@@ -56,6 +57,7 @@ var duplicates *string
 var after, before *time.Time
 var logFile *os.File
 var outputPath, keyringFile *string
+var secureUser, securePass *string
 
 var useListMutex sync.Mutex
 var useList MirrorList // List of mirrors to use
@@ -81,7 +83,7 @@ func main() {
 		//fmt.Fprintf(os.Stderr, "Date formats supported: https://github.com/araddon/dateparse\n")
 	}
 
-	var background = flag.Bool("background", false, "Ignore all keyboard inputs, background mode")
+	var background = flag.Bool("background", false, "Ignore all keyboard inputs, background mode (for non-interactive scripting)")
 	var mirrorList = flag.String("mirrors", "mirrorlist.txt", "Mirror / directory list of prefixes to use")
 	outputPath = flag.String("output", ".", "Path to put the repo files")
 	var logFilePath = flag.String("log", "", "File in which to store a log of files downloaded\n"+
@@ -97,6 +99,10 @@ func main() {
 	//testOnly = flag.Bool("test", false, "Just validate downloaded files")
 	duplicates = flag.String("dup", "symlink", "What to do with duplicates: omit, copy, symlink, hardlink")
 	keyringFile = flag.String("keyring", "", "Use keyring for verifying signed package files (example: keyring.gpg or keys/ directory)")
+	var secureCert = flag.String("client-cert", "", "Satellite repo, CERT for using PKI auth")
+	var secureKey = flag.String("client-key", "", "Satellite repo, KEY for using PKI auth")
+	secureUser = flag.String("client-user", "", "Satellite repo, using basic USER auth")
+	securePass = flag.String("client-pass", "", "Satellite repo, PASS for USER")
 
 	var afterStr = flag.String("after", "", "Select packages after specified date\n"+
 		"Date formats supported: https://github.com/araddon/dateparse")
@@ -104,6 +110,15 @@ func main() {
 		"Date formats supported: https://github.com/araddon/dateparse")
 
 	flag.Parse()
+
+	var tlsCert []tls.Certificate
+	if *secureCert != "" {
+		if cert, err := tls.LoadX509KeyPair(*secureCert, *secureKey); err != nil {
+			log.Fatal(err)
+		} else {
+			tlsCert = []tls.Certificate{cert}
+		}
+	}
 
 	if *keyringFile != "" {
 		fmt.Println("Loading keys from", *keyringFile)
@@ -241,7 +256,6 @@ func main() {
 			}
 
 			wg.Add(1)
-
 			go func(m string, ip net.IP) {
 				defer wg.Done()
 				if *debug {
@@ -250,28 +264,28 @@ func main() {
 				//repoPath := m + "/" + repoPath + "/"
 				//repomdPath := repoPath + "repodata/repomd.xml"
 
-				dial := func(network, address string) (net.Conn, error) {
-					_, port, err := net.SplitHostPort(address)
-					if err != nil {
-						return nil, err
-					}
-					return (&net.Dialer{
-						Timeout: *connTimeout,
-					}).Dial(network, net.JoinHostPort(ip.String(), port))
+				var netTransport = &http.Transport{
+					TLSHandshakeTimeout: 3 * time.Second,
+					TLSClientConfig:     &tls.Config{Certificates: tlsCert},
+					Dial: func(network, address string) (net.Conn, error) {
+						_, port, err := net.SplitHostPort(address)
+						if err != nil {
+							return nil, err
+						}
+						return (&net.Dialer{
+							Timeout: 5 * time.Second,
+						}).Dial(network, net.JoinHostPort(ip.String(), port))
+					},
 				}
 
-				var netTransport = &http.Transport{
-					Dial:                dial,
-					TLSHandshakeTimeout: 30 * time.Second,
-				}
 				client := http.Client{
-					Timeout:   5 * time.Second,
+					Timeout:   5 * time.Second, // Timeout for each segment
 					Transport: netTransport,
 				}
 
 				start := time.Now()
 				tmp = readFile(m, client)
-				if len(tmp) < 100 {
+				if len(tmp) < 4 {
 					return
 				}
 				delta := time.Now().Sub(start).Seconds() * 1000
@@ -279,12 +293,21 @@ func main() {
 					fmt.Printf("  %.02f ms for %d bytes - %s\n", delta, len(tmp), m)
 				}
 				if delta < 2000 {
+					netTransport.TLSHandshakeTimeout = 30 * time.Second
+					netTransport.Dial = func(network, address string) (net.Conn, error) {
+						_, port, err := net.SplitHostPort(address)
+						if err != nil {
+							return nil, err
+						}
+						return (&net.Dialer{
+							Timeout: *connTimeout, // Full connection timeout after dialing (to avoid stalled files)
+						}).Dial(network, net.JoinHostPort(ip.String(), port))
+					}
 
 					title := m
 					if len(ips) > 1 {
 						title += " (" + ip.String() + ")"
 					}
-					client.Timeout = *connTimeout
 
 					useListMutex.Lock()
 					id++
@@ -303,6 +326,13 @@ func main() {
 		}
 	}
 	wg.Wait()
+	if len(useList) == 0 {
+		fmt.Println("Testing all mirrors failed as none replied with content.")
+		os.Exit(1)
+	}
+	if *debug {
+		fmt.Println("All tests done")
+	}
 
 	// Expand the mirror list to allow the threading to work
 	for len(useList) < *threads {
@@ -589,13 +619,21 @@ func process(thread int, m *Mirror, j *FileEntry) {
 	attempted := j.attempted
 	j.attempted = true
 	output := path.Join(*outputPath, j.path)
-	url := m.URL + "/" + strings.TrimPrefix(j.path, "/")
+	u, err := url.Parse(m.URL)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	if *secureUser != "" {
+		u.User = url.UserPassword(*secureUser, *securePass)
+	}
+	u.Path = strings.TrimSuffix(u.Path, "/") + "/" + strings.TrimPrefix(j.path, "/")
 	worker_status[thread] = fmt.Sprintf("%d ~~ %s", m.ID, output)
 	if *debug {
-		fmt.Println("Downloading file", url, "to", output)
+		fmt.Println("Downloading file", u.Redacted(), "to", output)
 	}
 
-	err := handleFile(m, j)
+	err = handleFile(m, j, u)
 	if err != nil {
 		m.Failures++
 		if *debug {
@@ -657,9 +695,8 @@ func process(thread int, m *Mirror, j *FileEntry) {
 
 // The bulk of the work is done in this function, from testing the file on disk
 // to see if it is valid, to downloading the file from a given mirror.
-func handleFile(m *Mirror, j *FileEntry) error {
+func handleFile(m *Mirror, j *FileEntry, u *url.URL) error {
 	output := path.Join(*outputPath, j.path)
-	url := m.URL + "/" + strings.TrimPrefix(j.path, "/")
 	success := false
 	defer func() {
 		if !success {
@@ -735,7 +772,7 @@ func handleFile(m *Mirror, j *FileEntry) error {
 		/*if *testOnly {
 			return fmt.Errorf("Invalid file")
 		}*/
-		if url == "" {
+		if j.path == "" {
 			return fmt.Errorf("url empty")
 		}
 		os.Remove(output)
@@ -747,7 +784,7 @@ func handleFile(m *Mirror, j *FileEntry) error {
 		return fmt.Errorf("Unknown hash type for: %s", j.hash)
 	}
 
-	req, err := http.NewRequest("GET", url, nil)
+	req, err := http.NewRequest("GET", u.String(), nil)
 	if err != nil {
 		log.Println("Error in HTTP making new request", err)
 		return err
@@ -867,7 +904,7 @@ func handleFile(m *Mirror, j *FileEntry) error {
 			}
 			zeroCounter++
 			if zeroCounter > 1000 {
-				return fmt.Errorf("Server stopped talking: %s", url)
+				return fmt.Errorf("Server stopped talking: %s", u.Redacted())
 			}
 		} else {
 			zeroCounter = 0

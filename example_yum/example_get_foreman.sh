@@ -2,14 +2,16 @@
 
 output=/dev/shm/theforeman_repo
 mirrors=theforeman_mirrorlist.txt
-repos=latest/el7/x86_64
+repos=latest/el8/x86_64
 file_list=$output/foreman_filelist.txt
+user=myself
+pass=mypass
 
 # An example Yum downloader
 
 for repo in $repos; do
   echo Getting latest index for $repo
-  ../../yum-get-repomd/yum-get-repomd --insecure -mirrors $mirrors -output $output/$repo/ -repo $repo -keyring theforeman_keys/
+  ../../yum-get-repomd/yum-get-repomd --insecure -mirrors $mirrors -output $output/$repo/ -repo $repo -keyring theforeman_keys/ -client-user "$user" -client-pass "$pass"
   if [ $? == 1 ]; then echo Error encountered; exit; fi
 done
 
@@ -20,5 +22,5 @@ for repo in $repos; do
 done > $file_list
 
 echo Download the files to a local folder
-../filelist-mirror-downloader -mirrors $mirrors -list $file_list -output $output 
+../filelist-mirror-downloader -mirrors $mirrors -list $file_list -output $output -client-user "$user" -client-pass "$pass" -keyring theforeman_keys/
 if [ $? == 1 ]; then echo Error encountered; exit; fi

@@ -34,8 +34,8 @@ echo $?
 
 # Usage help:
 ```bash
-$ ./filelist-mirror-downloader  -h
-Yum Get RepoMD,  Version: 0.1.20220413.2152
+$ ./filelist-mirror-downloader -h
+Yum Get RepoMD
 
 Usage: ./filelist-mirror-downloader [options...]
 
@@ -44,18 +44,30 @@ Usage: ./filelist-mirror-downloader [options...]
         Date formats supported: https://github.com/araddon/dateparse
   -attempts int
         Attempts for each file (default 40)
+  -background
+        Ignore all keyboard inputs, background mode (for non-interactive scripting)
   -before string
         Select packages before specified date
         Date formats supported: https://github.com/araddon/dateparse
+  -client-cert string
+        Satellite repo, CERT for using PKI auth
+  -client-key string
+        Satellite repo, KEY for using PKI auth
+  -client-pass string
+        Satellite repo, PASS for USER
+  -client-user string
+        Satellite repo, using basic USER auth
   -debug
         Turn on debug comments
   -dup string
         What to do with duplicates: omit, copy, symlink, hardlink (default "symlink")
+  -keyring string
+        Use keyring for verifying signed package files (example: keyring.gpg or keys/ directory)
   -list string
         Filelist to be fetched (one per line with: HASH SIZE PATH) (default "filelist.txt")
   -log string
         File in which to store a log of files downloaded
-        Line prefixes (OnDisk, OnDiskSkip, Skipped, Fetched), indicate action taken.
+        Line prefixes (OnDisk, OnDiskSkip, Skipped, Fetched, Uncompressed, Failed), indicate action taken.
         Skip means that a file falls outside the required date bounds
   -mirrors string
         Mirror / directory list of prefixes to use (default "mirrorlist.txt")
@@ -63,8 +75,6 @@ Usage: ./filelist-mirror-downloader [options...]
         Path to put the repo files (default ".")
   -shuffle int
         Shuffle the mirror list every N downloads (default 100)
-  -test
-        Just validate downloaded files
   -threads int
         Concurrent downloads (default 4)
   -timeout duration
